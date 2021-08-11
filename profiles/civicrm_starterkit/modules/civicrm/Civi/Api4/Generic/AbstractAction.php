@@ -9,13 +9,6 @@
  | and copyright information, see https://civicrm.org/licensing       |
  +--------------------------------------------------------------------+
  */
-
-/**
- *
- * @package CRM
- * @copyright CiviCRM LLC https://civicrm.org/licensing
- */
-
 namespace Civi\Api4\Generic;
 
 use Civi\Api4\Utils\CoreUtil;
@@ -390,8 +383,9 @@ abstract class AbstractAction implements \ArrayAccess {
    * This function is called if checkPermissions is set to true.
    *
    * @return bool
+   * @internal Implement/override in civicrm-core.git only. Signature may evolve.
    */
-  public function isAuthorized() {
+  public function isAuthorized(): bool {
     $permissions = $this->getPermissions();
     return \CRM_Core_Permission::check($permissions);
   }
@@ -423,9 +417,7 @@ abstract class AbstractAction implements \ArrayAccess {
    * Returns schema fields for this entity & action.
    *
    * Here we bypass the api wrapper and run the getFields action directly.
-   * This is because we DON'T want the wrapper to check permissions as this is an internal op,
-   * but we DO want permissions to be checked inside the getFields request so e.g. the api_key
-   * field can be conditionally included.
+   * This is because we DON'T want the wrapper to check permissions as this is an internal op.
    * @see \Civi\Api4\Action\Contact\GetFields
    *
    * @throws \API_Exception
@@ -433,14 +425,19 @@ abstract class AbstractAction implements \ArrayAccess {
    */
   public function entityFields() {
     if (!$this->_entityFields) {
+      $allowedTypes = ['Field', 'Filter', 'Extra'];
+      if (method_exists($this, 'getCustomGroup')) {
+        $allowedTypes[] = 'Custom';
+      }
       $getFields = \Civi\API\Request::create($this->getEntityName(), 'getFields', [
         'version' => 4,
-        'checkPermissions' => $this->checkPermissions,
+        'checkPermissions' => FALSE,
         'action' => $this->getActionName(),
-        'includeCustom' => FALSE,
+        'where' => [['type', 'IN', $allowedTypes]],
       ]);
       $result = new Result();
-      $getFields->_run($result);
+      // Pass TRUE for the private $isInternal param
+      $getFields->_run($result, TRUE);
       $this->_entityFields = (array) $result->indexBy('name');
     }
     return $this->_entityFields;

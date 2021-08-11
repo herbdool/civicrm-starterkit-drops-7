@@ -10,13 +10,6 @@
  +--------------------------------------------------------------------+
  */
 
-/**
- *
- * @package CRM
- * @copyright CiviCRM LLC https://civicrm.org/licensing
- */
-
-
 namespace Civi\Api4\Generic\Traits;
 
 use Civi\Api4\Utils\FormattingUtil;
@@ -31,7 +24,7 @@ trait CustomValueActionTrait {
 
   public function __construct($customGroup, $actionName) {
     $this->customGroup = $customGroup;
-    parent::__construct('CustomValue', $actionName, ['id', 'entity_id']);
+    parent::__construct('CustomValue', $actionName);
   }
 
   /**
@@ -51,7 +44,7 @@ trait CustomValueActionTrait {
   /**
    * @inheritDoc
    */
-  protected function writeObjects($items) {
+  protected function writeObjects(&$items) {
     $fields = $this->entityFields();
     foreach ($items as $idx => $item) {
       FormattingUtil::formatWriteParams($item, $fields);

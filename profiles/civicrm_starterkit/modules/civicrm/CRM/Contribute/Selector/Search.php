@@ -53,6 +53,7 @@ class CRM_Contribute_Selector_Search extends CRM_Core_Selector_Base implements C
     'contribution_cancel_date',
     'product_name',
     'is_test',
+    'is_template',
     'contribution_recur_id',
     'receipt_date',
     'membership_id',
@@ -248,7 +249,7 @@ class CRM_Contribute_Selector_Search extends CRM_Core_Selector_Base implements C
       $params['rowCount'] = $this->_limit;
     }
     else {
-      $params['rowCount'] = CRM_Utils_Pager::ROWCOUNT;
+      $params['rowCount'] = Civi::settings()->get('default_pager_size');
     }
 
     $params['buttonTop'] = 'PagerTopButton';
@@ -353,6 +354,7 @@ class CRM_Contribute_Selector_Search extends CRM_Core_Selector_Base implements C
           $qfKey,
           $componentContext
       );
+
       $checkLineItem = FALSE;
       $row = [];
       // Now check for lineItems
@@ -445,6 +447,7 @@ class CRM_Contribute_Selector_Search extends CRM_Core_Selector_Base implements C
           'title' => $buttonName,
         ];
       }
+      $links = $links + CRM_Contribute_Task::getContextualLinks($row);
 
       $row['action'] = CRM_Core_Action::formLink(
         $links,

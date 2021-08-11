@@ -1076,7 +1076,7 @@ class CRM_Contact_BAO_Query {
           $elementCmpName = 'phone';
         }
 
-        if (in_array($elementCmpName, array_keys($addressCustomFields))) {
+        if (array_key_exists($elementCmpName, $addressCustomFields)) {
           if ($cfID = CRM_Core_BAO_CustomField::getKeyID($elementCmpName)) {
             $addressCustomFieldIds[$cfID][$name] = 1;
           }
@@ -3130,7 +3130,7 @@ class CRM_Contact_BAO_Query {
    * @return string WHERE clause component for smart group criteria.
    * @throws \CRM_Core_Exception
    */
-  public function addGroupContactCache($groups, $tableAlias, $joinTable = "contact_a", $op, $joinColumn = 'id') {
+  public function addGroupContactCache($groups, $tableAlias, $joinTable, $op, $joinColumn = 'id') {
     $isNullOp = (strpos($op, 'NULL') !== FALSE);
     $groupsIds = $groups;
 
@@ -4451,7 +4451,6 @@ civicrm_relationship.start_date > {$today}
 
       if (empty(self::$_defaultReturnProperties[$mode])) {
         self::$_defaultReturnProperties[$mode] = [
-          'home_URL' => 1,
           'image_URL' => 1,
           'legal_identifier' => 1,
           'external_identifier' => 1,
@@ -5906,7 +5905,7 @@ AND   displayRelType.is_active = 1
     $op,
     $value,
     $grouping,
-    $daoName = NULL,
+    $daoName,
     $field,
     $label,
     $dataType = 'String'
@@ -6327,7 +6326,7 @@ AND   displayRelType.is_active = 1
       $value = $formValues[$element] ?? NULL;
       if ($value) {
         if (is_array($value)) {
-          if (in_array($element, array_keys($changeNames))) {
+          if (array_key_exists($element, $changeNames)) {
             unset($formValues[$element]);
             $element = $changeNames[$element];
           }

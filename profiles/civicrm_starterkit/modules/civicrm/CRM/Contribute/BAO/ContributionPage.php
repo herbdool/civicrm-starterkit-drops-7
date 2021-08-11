@@ -16,6 +16,7 @@
  */
 
 use Civi\Api4\Contribution;
+use Civi\Api4\LineItem;
 
 /**
  * This class contains Contribution Page related functions.
@@ -286,14 +287,14 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
       $template = CRM_Core_Smarty::singleton();
 
       if (!array_key_exists('related_contact', $values)) {
-        list($displayName, $email) = CRM_Contact_BAO_Contact_Location::getEmailDetails($contactID, FALSE, CRM_Core_BAO_LocationType::getBilling());
+        [$displayName, $email] = CRM_Contact_BAO_Contact_Location::getEmailDetails($contactID, FALSE, CRM_Core_BAO_LocationType::getBilling());
       }
       // get primary location email if no email exist( for billing location).
       if (!$email) {
-        list($displayName, $email) = CRM_Contact_BAO_Contact_Location::getEmailDetails($contactID);
+        [$displayName, $email] = CRM_Contact_BAO_Contact_Location::getEmailDetails($contactID);
       }
       if (empty($displayName)) {
-        list($displayName, $email) = CRM_Contact_BAO_Contact_Location::getEmailDetails($contactID);
+        [$displayName, $email] = CRM_Contact_BAO_Contact_Location::getEmailDetails($contactID);
       }
 
       //for display profile need to get individual contact id,
@@ -364,6 +365,7 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
         'pay_later_receipt' => $values['pay_later_receipt'] ?? NULL,
         'honor_block_is_active' => $values['honor_block_is_active'] ?? NULL,
         'contributionStatus' => $values['contribution_status'] ?? NULL,
+        'currency' => CRM_Core_DAO::getFieldValue('CRM_Contribute_DAO_Contribution', $values['contribution_id'], 'currency') ?? CRM_Core_Config::singleton()->defaultCurrency,
       ];
 
       if (!empty($values['financial_type_id'])) {
@@ -510,32 +512,35 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
    *   TxnType.
    *   Contribution page id.
    * @param object $recur
-   *   Object of recurring contribution table.
-   * @param bool|object $autoRenewMembership is it a auto renew membership.
    *
    * @throws \API_Exception
    */
-  public static function recurringNotify($contributionID, $type, $recur, $autoRenewMembership = FALSE): void {
+  public static function recurringNotify($contributionID, $type, $recur): void {
     $contribution = Contribution::get(FALSE)
       ->addWhere('id', '=', $contributionID)
       ->setSelect([
         'contribution_page_id',
         'contact_id',
         'contribution_recur_id',
-        'contribution_recur.is_email_receipt',
-        'contribution_page.title',
-        'contribution_page.is_email_receipt',
-        'contribution_page.receipt_from_name',
-        'contribution_page.receipt_from_email',
-        'contribution_page.cc_receipt',
-        'contribution_page.bcc_receipt',
+        'contribution_recur_id.is_email_receipt',
+        'contribution_page_id.title',
+        'contribution_page_id.is_email_receipt',
+        'contribution_page_id.receipt_from_name',
+        'contribution_page_id.receipt_from_email',
+        'contribution_page_id.cc_receipt',
+        'contribution_page_id.bcc_receipt',
       ])
       ->execute()->first();
 
-    if ($contribution['contribution_recur.is_email_receipt'] || $contribution['contribution_page.is_email_receipt']) {
-      if ($contribution['contribution_page.receipt_from_email']) {
-        $receiptFromName = $contribution['contribution_page.receipt_from_name'];
-        $receiptFromEmail = $contribution['contribution_page.receipt_from_email'];
+    $isMembership = !empty(LineItem::get(FALSE)
+      ->addWhere('contribution_id', '=', $contributionID)
+      ->addWhere('entity_table', '=', 'civicrm_membership')
+      ->addSelect('id')->execute()->first());
+
+    if ($contribution['contribution_recur_id.is_email_receipt'] || $contribution['contribution_page_id.is_email_receipt']) {
+      if ($contribution['contribution_page_id.receipt_from_email']) {
+        $receiptFromName = $contribution['contribution_page_id.receipt_from_name'];
+        $receiptFromEmail = $contribution['contribution_page_id.receipt_from_email'];
       }
       else {
         [$receiptFromName, $receiptFromEmail] = CRM_Core_BAO_Domain::getNameAndEmail();
@@ -558,15 +563,15 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
           'displayName' => $displayName,
           'receipt_from_name' => $receiptFromName,
           'receipt_from_email' => $receiptFromEmail,
-          'auto_renew_membership' => $autoRenewMembership,
+          'auto_renew_membership' => $isMembership,
         ],
         'from' => $receiptFrom,
         'toName' => $displayName,
         'toEmail' => $email,
       ];
       //CRM-13811
-      $templatesParams['cc'] = $contribution['contribution_page.cc_receipt'];
-      $templatesParams['bcc'] = $contribution['contribution_page.cc_receipt'];
+      $templatesParams['cc'] = $contribution['contribution_page_id.cc_receipt'];
+      $templatesParams['bcc'] = $contribution['contribution_page_id.cc_receipt'];
       if ($recur->id) {
         // in some cases its just recurringNotify() thats called for the first time and these urls don't get set.
         // like in PaypalPro, & therefore we set it here additionally.
@@ -827,7 +832,7 @@ LEFT JOIN  civicrm_premiums            ON ( civicrm_premiums.entity_id = civicrm
    *
    * @return array|string
    */
-  public static function formatModuleData($params, $setDefault = FALSE, $module) {
+  public static function formatModuleData($params, $setDefault, $module) {
     $tsLocale = CRM_Core_I18n::getLocale();
     $config = CRM_Core_Config::singleton();
     $json = $jsonDecode = NULL;

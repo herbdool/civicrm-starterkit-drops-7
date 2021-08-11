@@ -1,5 +1,4 @@
 <?php
-
 /*
  +--------------------------------------------------------------------+
  | Copyright CiviCRM LLC. All rights reserved.                        |
@@ -9,13 +8,6 @@
  | and copyright information, see https://civicrm.org/licensing       |
  +--------------------------------------------------------------------+
  */
-
-/**
- *
- * @package CRM
- * @copyright CiviCRM LLC https://civicrm.org/licensing
- */
-
 namespace Civi\Api4;
 
 /**
@@ -103,23 +95,30 @@ class CustomValue {
   /**
    * @param string $customGroup
    * @param bool $checkPermissions
-   * @return Action\CustomValue\Replace
+   * @return Generic\BasicReplaceAction
    * @throws \API_Exception
    */
   public static function replace($customGroup, $checkPermissions = TRUE) {
-    return (new Action\CustomValue\Replace($customGroup, __FUNCTION__))
+    return (new Generic\BasicReplaceAction("Custom_$customGroup", __FUNCTION__))
       ->setCheckPermissions($checkPermissions);
   }
 
   /**
    * @param string $customGroup
    * @param bool $checkPermissions
-   * @return Action\CustomValue\GetActions
+   * @return Action\GetActions
    * @throws \API_Exception
    */
   public static function getActions($customGroup = NULL, $checkPermissions = TRUE) {
-    return (new Action\CustomValue\GetActions($customGroup, __FUNCTION__))
+    return (new Action\GetActions("Custom_$customGroup", __FUNCTION__))
       ->setCheckPermissions($checkPermissions);
+  }
+
+  /**
+   * @return \Civi\Api4\Generic\CheckAccessAction
+   */
+  public static function checkAccess($customGroup) {
+    return new Generic\CheckAccessAction("Custom_$customGroup", __FUNCTION__);
   }
 
   /**
@@ -142,7 +141,8 @@ class CustomValue {
     return [
       'class' => __CLASS__,
       'type' => ['CustomValue'],
-      'searchable' => TRUE,
+      'searchable' => 'secondary',
+      'primary_key' => ['id'],
       'see' => [
         'https://docs.civicrm.org/user/en/latest/organising-your-data/creating-custom-fields/#multiple-record-fieldsets',
         '\Civi\Api4\CustomGroup',

@@ -795,7 +795,7 @@ WHERE  id IN (" . implode(',', array_keys($priceFields)) . ')';
             $selectedAmounts[$opId] = $options[$opId]['amount'];
           }
         }
-        elseif (in_array($fields["price_{$fieldId}"], array_keys($options))) {
+        elseif (array_key_exists($fields["price_{$fieldId}"], $options)) {
           $selectedAmounts[$fields["price_{$fieldId}"]] = $options[$fields["price_{$fieldId}"]]['amount'];
         }
       }
@@ -804,7 +804,7 @@ WHERE  id IN (" . implode(',', array_keys($priceFields)) . ')';
       // now we have all selected amount in hand.
       $totalAmount = array_sum($selectedAmounts);
       // The form offers a field to enter the amount paid. This may differ from the amount that is due to complete the purchase
-      $totalPaymentAmountEnteredOnForm = CRM_Utils_Array::value('partial_payment_total', $fields, CRM_Utils_Array::value('total_amount', $fields));
+      $totalPaymentAmountEnteredOnForm = CRM_Utils_Array::value('total_amount', $fields);
       if ($totalAmount < 0) {
         $error['_qf_default'] = ts('%1 amount can not be less than zero. Please select the options accordingly.', [1 => $componentName]);
       }

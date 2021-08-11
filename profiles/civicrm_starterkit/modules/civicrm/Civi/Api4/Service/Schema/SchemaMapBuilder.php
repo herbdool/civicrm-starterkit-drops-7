@@ -10,13 +10,6 @@
  +--------------------------------------------------------------------+
  */
 
-/**
- *
- * @package CRM
- * @copyright CiviCRM LLC https://civicrm.org/licensing
- */
-
-
 namespace Civi\Api4\Service\Schema;
 
 use Civi\Api4\Entity;
@@ -75,8 +68,6 @@ class SchemaMapBuilder {
         $this->addCustomFields($map, $table, $data['name']);
       }
     }
-
-    $this->addBackReferences($map);
   }
 
   /**
@@ -91,53 +82,17 @@ class SchemaMapBuilder {
     if ($fkClass) {
       $tableName = AllCoreTables::getTableForClass($fkClass);
       $fkKey = $data['FKKeyColumn'] ?? 'id';
-      $alias = str_replace('_id', '', $field);
-      $joinable = new Joinable($tableName, $fkKey, $alias);
+      // Backward-compatibility for older api calls using e.g. "contact" instead of "contact_id"
+      if (strpos($field, '_id')) {
+        $alias = str_replace('_id', '', $field);
+        $joinable = new Joinable($tableName, $fkKey, $alias);
+        $joinable->setJoinType($joinable::JOIN_TYPE_MANY_TO_ONE);
+        $joinable->setDeprecated();
+        $table->addTableLink($field, $joinable);
+      }
+      $joinable = new Joinable($tableName, $fkKey, $field);
       $joinable->setJoinType($joinable::JOIN_TYPE_MANY_TO_ONE);
       $table->addTableLink($field, $joinable);
-    }
-  }
-
-  /**
-   * Loop through existing links and provide link from the other side
-   *
-   * @param SchemaMap $map
-   */
-  private function addBackReferences(SchemaMap $map) {
-    foreach ($map->getTables() as $table) {
-      foreach ($table->getTableLinks() as $link) {
-        $target = $map->getTableByName($link->getTargetTable());
-        $tableName = $link->getBaseTable();
-        // Exclude custom field tables
-        if (strpos($link->getTargetTable(), 'civicrm_value_') !== 0 && strpos($link->getBaseTable(), 'civicrm_value_') !== 0) {
-          $plural = str_replace('civicrm_', '', $this->getPlural($tableName));
-          $joinable = new Joinable($tableName, $link->getBaseColumn(), $plural);
-          $joinable->setJoinType($joinable::JOIN_TYPE_ONE_TO_MANY);
-          $target->addTableLink($link->getTargetColumn(), $joinable);
-        }
-      }
-    }
-  }
-
-  /**
-   * Simple implementation of pluralization.
-   * Could be replaced with symfony/inflector
-   *
-   * @param string $singular
-   *
-   * @return string
-   */
-  private function getPlural($singular) {
-    $last_letter = substr($singular, -1);
-    switch ($last_letter) {
-      case 'y':
-        return substr($singular, 0, -1) . 'ies';
-
-      case 's':
-        return $singular . 'es';
-
-      default:
-        return $singular . 's';
     }
   }
 
@@ -154,7 +109,7 @@ class SchemaMapBuilder {
     }
     $fieldData = \CRM_Utils_SQL_Select::from('civicrm_custom_field f')
       ->join('custom_group', 'INNER JOIN civicrm_custom_group g ON g.id = f.custom_group_id')
-      ->select(['g.name as custom_group_name', 'g.table_name', 'g.is_multiple', 'f.name', 'label', 'column_name', 'option_group_id'])
+      ->select(['g.name as custom_group_name', 'g.table_name', 'g.is_multiple', 'f.name', 'f.data_type', 'label', 'column_name', 'option_group_id', 'serialize'])
       ->where('g.extends IN (@entity)', ['@entity' => $customInfo['extends']])
       ->where('g.is_active')
       ->where('f.is_active')
@@ -181,6 +136,14 @@ class SchemaMapBuilder {
       if (!empty($fieldData->is_multiple)) {
         $joinable = new Joinable($baseTable->getName(), $customInfo['column'], AllCoreTables::convertEntityNameToLower($entityName));
         $customTable->addTableLink('entity_id', $joinable);
+      }
+
+      if ($fieldData->data_type === 'ContactReference') {
+        $joinable = new Joinable('civicrm_contact', 'id', $fieldData->name);
+        if ($fieldData->serialize) {
+          $joinable->setSerialize((int) $fieldData->serialize);
+        }
+        $customTable->addTableLink($fieldData->column_name, $joinable);
       }
     }
 

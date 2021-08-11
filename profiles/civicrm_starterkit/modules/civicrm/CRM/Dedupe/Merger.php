@@ -655,14 +655,14 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
    */
   protected static function getMultiValueCidRefs() {
     $fields = \Civi\Api4\CustomField::get(FALSE)
-      ->addSelect('custom_group.table_name', 'column_name', 'serialize')
+      ->addSelect('custom_group_id.table_name', 'column_name', 'serialize')
       ->addWhere('data_type', '=', 'ContactReference')
       ->addWhere('serialize', 'IS NOT EMPTY')
       ->execute();
 
     $map = [];
     foreach ($fields as $field) {
-      $map[$field['custom_group.table_name']][$field['column_name']] = $field['serialize'];
+      $map[$field['custom_group_id.table_name']][$field['column_name']] = $field['serialize'];
     }
     return $map;
   }
@@ -1702,7 +1702,7 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
    * @return string
    */
   public static function getMergeCacheKeyString($rule_group_id, $group_id, $criteria, $checkPermissions, $searchLimit) {
-    $contactType = CRM_Dedupe_BAO_RuleGroup::getContactTypeForRuleGroup($rule_group_id);
+    $contactType = CRM_Dedupe_BAO_DedupeRuleGroup::getContactTypeForRuleGroup($rule_group_id);
     $cacheKeyString = "merge_{$contactType}";
     $cacheKeyString .= $rule_group_id ? "_{$rule_group_id}" : '_0';
     $cacheKeyString .= $group_id ? "_{$group_id}" : '_0';
@@ -2439,7 +2439,7 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
             ) {
               // Set this value as the default against the 'other' contact value
               $rows["move_location_{$blockName}_{$count}"]['main'] = $mainValueCheck[$blockInfo['displayField']];
-              $rows["move_location_{$blockName}_{$count}"]['main_is_primary'] = $mainValueCheck['is_primary'];
+              $rows["move_location_{$blockName}_{$count}"]['main_is_primary'] = $mainValueCheck['is_primary'] ?? 0;
               $rows["move_location_{$blockName}_{$count}"]['location_entity'] = $blockName;
               $mainContactBlockId = $mainValueCheck['id'];
               break;

@@ -110,6 +110,12 @@
           {$form.contribution_recurring.html}
         </td>
       </tr>
+      <tr>
+        <td>{$form.is_template.label} {help id="is-template" file="CRM/Contact/Form/Search/Advanced"}</td>
+        <td>
+          {$form.is_template.html}
+        </td>
+      </tr>
       </tbody>
     </table>
   </td>
@@ -172,7 +178,7 @@ campaignTrClass='' campaignTdClass=''}
   </td>
 </tr>
 
-{if $contributionGroupTree}
+{if !empty($contributionGroupTree)}
 <tr>
   <td colspan="2">
   {include file="CRM/Custom/Form/Search.tpl" groupTree=$contributionGroupTree showHideLinks=false}</td>

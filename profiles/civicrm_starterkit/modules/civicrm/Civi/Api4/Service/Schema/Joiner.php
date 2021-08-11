@@ -10,13 +10,6 @@
  +--------------------------------------------------------------------+
  */
 
-/**
- *
- * @package CRM
- * @copyright CiviCRM LLC https://civicrm.org/licensing
- */
-
-
 namespace Civi\Api4\Service\Schema;
 
 use Civi\API\Exception\UnauthorizedException;
@@ -76,6 +69,14 @@ class Joiner {
 
       if ($joinEntity && !$query->checkEntityAccess($joinEntity)) {
         throw new UnauthorizedException('Cannot join to ' . $joinEntity);
+      }
+      if ($link->isDeprecated()) {
+        \CRM_Core_Error::deprecatedWarning("Deprecated join alias '$alias' used in APIv4 get. Should be changed to '{$alias}_id'");
+      }
+      // Serialized joins are rendered by Api4SelectQuery::renderSerializedJoin
+      if ($link->getSerialize()) {
+        // Virtual join, don't actually add this table
+        break;
       }
 
       $bao = $joinEntity ? CoreUtil::getBAOFromApiName($joinEntity) : NULL;

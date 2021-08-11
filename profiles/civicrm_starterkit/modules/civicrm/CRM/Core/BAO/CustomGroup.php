@@ -45,37 +45,29 @@ class CRM_Core_BAO_CustomGroup extends CRM_Core_DAO_CustomGroup {
       $group->title = $params['title'];
     }
 
-    $extends = CRM_Utils_Array::value('extends', $params, []);
-    $extendsEntity = $extends[0] ?? NULL;
-
-    $participantEntities = [
-      'ParticipantRole',
-      'ParticipantEventName',
-      'ParticipantEventType',
-    ];
-
-    if (in_array($extendsEntity, $participantEntities)) {
-      $group->extends = 'Participant';
-    }
-    else {
-      $group->extends = $extendsEntity;
-    }
-
-    $group->extends_entity_column_id = 'null';
-    if (in_array($extendsEntity, $participantEntities)
-    ) {
-      $group->extends_entity_column_id = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_OptionValue', $extendsEntity, 'value', 'name');
-    }
-
-    // this is format when form get submit.
-    $extendsChildType = $extends[1] ?? NULL;
+    $extendsChildType = NULL;
     // lets allow user to pass direct child type value, CRM-6893
     if (!empty($params['extends_entity_column_value'])) {
       $extendsChildType = $params['extends_entity_column_value'];
     }
     if (!CRM_Utils_System::isNull($extendsChildType)) {
+      $b = self::getMungedEntity($params['extends'], $params['extends_entity_column_id'] ?? NULL);
+      $registeredSubTypes = self::getSubTypes()[$b];
+      if (is_array($extendsChildType)) {
+        foreach ($extendsChildType as $childType) {
+          if (!array_key_exists($childType, $registeredSubTypes) && !in_array($childType, $registeredSubTypes, TRUE)) {
+            throw new CRM_Core_Exception('Supplied Sub type is not valid for the specified entitiy');
+          }
+        }
+      }
+      else {
+        if (!array_key_exists($extendsChildType, $registeredSubTypes) && !in_array($extendsChildType, $registeredSubTypes, TRUE)) {
+          throw new CRM_Core_Exception('Supplied Sub type is not valid for the specified entitiy');
+        }
+        $extendsChildType = [$extendsChildType];
+      }
       $extendsChildType = implode(CRM_Core_DAO::VALUE_SEPARATOR, $extendsChildType);
-      if (CRM_Utils_Array::value(0, $extends) == 'Relationship') {
+      if ($params['extends'] == 'Relationship') {
         $extendsChildType = str_replace(['_a_b', '_b_a'], [
           '',
           '',
@@ -107,6 +99,8 @@ class CRM_Core_BAO_CustomGroup extends CRM_Core_DAO_CustomGroup {
       'is_active',
       'is_multiple',
       'icon',
+      'extends_entity_column_id',
+      'extends',
     ];
     $current_db_version = CRM_Core_BAO_Domain::version();
     $is_public_version = version_compare($current_db_version, '4.7.19', '>=');
@@ -148,13 +142,15 @@ class CRM_Core_BAO_CustomGroup extends CRM_Core_DAO_CustomGroup {
       $group->created_id = $params['created_id'] ?? NULL;
       $group->created_date = $params['created_date'] ?? NULL;
 
-      // we do this only once, so name never changes
-      if (isset($params['name'])) {
-        $group->name = CRM_Utils_String::munge($params['name'], '_', 64);
+      // Process name only during create, so it never changes
+      if (!empty($params['name'])) {
+        $group->name = CRM_Utils_String::munge($params['name']);
       }
       else {
-        $group->name = CRM_Utils_String::munge($group->title, '_', 64);
+        $group->name = CRM_Utils_String::munge($group->title);
       }
+
+      self::validateCustomGroupName($group);
 
       if (isset($params['table_name'])) {
         $tableName = $params['table_name'];
@@ -200,7 +196,7 @@ class CRM_Core_BAO_CustomGroup extends CRM_Core_DAO_CustomGroup {
         $params['id'],
         'table_name'
       );
-      CRM_Core_BAO_SchemaHandler::changeFKConstraint($table, self::mapTableName($extendsEntity));
+      CRM_Core_BAO_SchemaHandler::changeFKConstraint($table, self::mapTableName($params['extends']));
     }
     $transaction->commit();
 
@@ -229,6 +225,22 @@ class CRM_Core_BAO_CustomGroup extends CRM_Core_DAO_CustomGroup {
    */
   public static function retrieve(&$params, &$defaults) {
     return CRM_Core_DAO::commonRetrieve('CRM_Core_DAO_CustomGroup', $params, $defaults);
+  }
+
+  /**
+   * Ensure group name does not conflict with an existing field
+   *
+   * @param CRM_Core_DAO_CustomGroup $group
+   */
+  public static function validateCustomGroupName(CRM_Core_DAO_CustomGroup $group) {
+    $extends = in_array($group->extends, CRM_Contact_BAO_ContactType::basicTypes(TRUE)) ? 'Contact' : $group->extends;
+    $extendsDAO = CRM_Core_DAO_AllCoreTables::getFullName($extends);
+    if ($extendsDAO) {
+      $fields = array_column($extendsDAO::fields(), 'name');
+      if (in_array($group->name, $fields)) {
+        $group->name .= '0';
+      }
+    }
   }
 
   /**
@@ -1251,6 +1263,23 @@ ORDER BY civicrm_custom_group.weight,
   }
 
   /**
+   * Delete a record from supplied params.
+   * API3 calls deleteGroup() which removes the related civicrm_value_X table.
+   * This function does the same for API4.
+   *
+   * @param array $record
+   *   'id' is required.
+   * @return CRM_Core_DAO
+   * @throws CRM_Core_Exception
+   */
+  public static function deleteRecord(array $record) {
+    $table = CRM_Core_DAO::getFieldValue(__CLASS__, $record['id'], 'table_name');
+    $result = parent::deleteRecord($record);
+    CRM_Core_BAO_SchemaHandler::dropTable($table);
+    return $result;
+  }
+
+  /**
    * Set defaults.
    *
    * @param array $groupTree
@@ -1355,8 +1384,13 @@ ORDER BY civicrm_custom_group.weight,
                 CRM_Utils_Array::formatArrayKeys($value);
                 $checkedValue = $value;
               }
+              // Serialized values from db
+              elseif ($value === '' || strpos($value, CRM_Core_DAO::VALUE_SEPARATOR) !== FALSE) {
+                $checkedValue = CRM_Utils_Array::explodePadded($value);
+              }
+              // Comma-separated values e.g. from a select2 widget during reload on form error
               else {
-                $checkedValue = explode(CRM_Core_DAO::VALUE_SEPARATOR, substr($value, 1, -1));
+                $checkedValue = explode(',', $value);
               }
               foreach ($checkedValue as $val) {
                 if ($val) {
@@ -2176,6 +2210,59 @@ SELECT  civicrm_custom_group.id as groupID, civicrm_custom_group.title as groupT
       $groupTree['info'] = ['tables' => $customValueTables];
     }
     return [$multipleFieldGroups, $groupTree];
+  }
+
+  public static function getSubTypes(): array {
+    $sel2 = [];
+    $activityType = CRM_Core_PseudoConstant::activityType(FALSE, TRUE, FALSE, 'label', TRUE);
+
+    $eventType = CRM_Core_OptionGroup::values('event_type');
+    $grantType = CRM_Core_OptionGroup::values('grant_type');
+    $campaignTypes = CRM_Campaign_PseudoConstant::campaignType();
+    $membershipType = CRM_Member_BAO_MembershipType::getMembershipTypes(FALSE);
+    $participantRole = CRM_Core_OptionGroup::values('participant_role');
+
+    asort($activityType);
+    asort($eventType);
+    asort($grantType);
+    asort($membershipType);
+    asort($participantRole);
+
+    $sel2['Event'] = $eventType;
+    $sel2['Grant'] = $grantType;
+    $sel2['Activity'] = $activityType;
+    $sel2['Campaign'] = $campaignTypes;
+    $sel2['Membership'] = $membershipType;
+    $sel2['ParticipantRole'] = $participantRole;
+    $sel2['ParticipantEventName'] = CRM_Event_PseudoConstant::event(NULL, FALSE, "( is_template IS NULL OR is_template != 1 )");
+    $sel2['ParticipantEventType'] = $eventType;
+    $sel2['Contribution'] = CRM_Contribute_PseudoConstant::financialType();
+    $sel2['Relationship'] = CRM_Custom_Form_Group::getRelationshipTypes();
+
+    $sel2['Individual'] = CRM_Contact_BAO_ContactType::subTypePairs('Individual', FALSE, NULL);
+    $sel2['Household'] = CRM_Contact_BAO_ContactType::subTypePairs('Household', FALSE, NULL);
+    $sel2['Organization'] = CRM_Contact_BAO_ContactType::subTypePairs('Organization', FALSE, NULL);
+
+    CRM_Core_BAO_CustomGroup::getExtendedObjectTypes($sel2);
+    return $sel2;
+  }
+
+  /**
+   * Get the munged entity.
+   *
+   * This is the entity eg. Relationship or the name of the sub entity
+   * e.g ParticipantRole.
+   *
+   * @param string $extends
+   * @param int|null $extendsEntityColumn
+   *
+   * @return string
+   */
+  protected static function getMungedEntity($extends, $extendsEntityColumn = NULL) {
+    if (!$extendsEntityColumn || $extendsEntityColumn === 'null') {
+      return $extends;
+    }
+    return CRM_Core_OptionGroup::values('custom_data_type', FALSE, FALSE, FALSE, NULL, 'name')[$extendsEntityColumn];
   }
 
 }

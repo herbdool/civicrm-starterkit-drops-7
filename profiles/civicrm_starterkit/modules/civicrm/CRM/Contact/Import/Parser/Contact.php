@@ -8,6 +8,9 @@
  | and copyright information, see https://civicrm.org/licensing       |
  +--------------------------------------------------------------------+
  */
+
+use Civi\Api4\Contact;
+
 require_once 'CRM/Utils/DeprecatedUtils.php';
 require_once 'api/v3/utils.php';
 
@@ -239,10 +242,10 @@ class CRM_Contact_Import_Parser_Contact extends CRM_Contact_Import_Parser {
    * @return bool
    *   the result of this processing
    */
-  public function summary(&$values) {
+  public function summary(&$values): int {
     $erroneousField = NULL;
-    $response = $this->setActiveFieldValues($values, $erroneousField);
-
+    $this->setActiveFieldValues($values, $erroneousField);
+    $rowNumber = (int) ($values[count($values) - 1]);
     $errorMessage = NULL;
     $errorRequired = FALSE;
     switch ($this->_contactType) {
@@ -277,12 +280,10 @@ class CRM_Contact_Import_Parser_Contact extends CRM_Contact_Import_Parser {
         break;
     }
 
-    $statusFieldName = $this->_statusFieldName;
-
     if ($this->_emailIndex >= 0) {
       /* If we don't have the required fields, bail */
 
-      if ($this->_contactType == 'Individual' && !$this->_updateWithId) {
+      if ($this->_contactType === 'Individual' && !$this->_updateWithId) {
         if ($errorRequired && empty($values[$this->_emailIndex])) {
           if ($errorMessage) {
             $errorMessage .= ' ' . ts('OR') . ' ' . ts('Email Address');
@@ -291,11 +292,7 @@ class CRM_Contact_Import_Parser_Contact extends CRM_Contact_Import_Parser {
             $errorMessage = ts('Missing required field:') . ' ' . ts('Email Address');
           }
           array_unshift($values, $errorMessage);
-          $importRecordParams = [
-            $statusFieldName => 'ERROR',
-            "${statusFieldName}Msg" => $errorMessage,
-          ];
-          $this->updateImportRecord($values[count($values) - 1], $importRecordParams);
+          $this->setImportStatus($rowNumber, 'ERROR', $errorMessage);
 
           return CRM_Import_Parser::ERROR;
         }
@@ -308,11 +305,7 @@ class CRM_Contact_Import_Parser_Contact extends CRM_Contact_Import_Parser {
         if (!CRM_Utils_Rule::email($email)) {
           $errorMessage = ts('Invalid Email address');
           array_unshift($values, $errorMessage);
-          $importRecordParams = [
-            $statusFieldName => 'ERROR',
-            "${statusFieldName}Msg" => $errorMessage,
-          ];
-          $this->updateImportRecord($values[count($values) - 1], $importRecordParams);
+          $this->setImportStatus($rowNumber, 'ERROR', $errorMessage);
 
           return CRM_Import_Parser::ERROR;
         }
@@ -329,11 +322,7 @@ class CRM_Contact_Import_Parser_Contact extends CRM_Contact_Import_Parser {
         $errorMessage = ts('Missing required field:') . ' ' . ts('Email Address');
       }
       array_unshift($values, $errorMessage);
-      $importRecordParams = [
-        $statusFieldName => 'ERROR',
-        "${statusFieldName}Msg" => $errorMessage,
-      ];
-      $this->updateImportRecord($values[count($values) - 1], $importRecordParams);
+      $this->setImportStatus($rowNumber, 'ERROR', $errorMessage);
 
       return CRM_Import_Parser::ERROR;
     }
@@ -346,11 +335,7 @@ class CRM_Contact_Import_Parser_Contact extends CRM_Contact_Import_Parser {
       if ($externalDupe = CRM_Utils_Array::value($externalID, $this->_allExternalIdentifiers)) {
         $errorMessage = ts('External ID conflicts with record %1', [1 => $externalDupe]);
         array_unshift($values, $errorMessage);
-        $importRecordParams = [
-          $statusFieldName => 'ERROR',
-          "${statusFieldName}Msg" => $errorMessage,
-        ];
-        $this->updateImportRecord($values[count($values) - 1], $importRecordParams);
+        $this->setImportStatus($rowNumber, 'ERROR', $errorMessage);
         return CRM_Import_Parser::ERROR;
       }
       //otherwise, count it and move on
@@ -378,24 +363,12 @@ class CRM_Contact_Import_Parser_Contact extends CRM_Contact_Import_Parser {
     $this->isErrorInCoreData($params, $errorMessage);
     if ($errorMessage) {
       $tempMsg = "Invalid value for field(s) : $errorMessage";
-      // put the error message in the import record in the DB
-      $importRecordParams = [
-        $statusFieldName => 'ERROR',
-        "${statusFieldName}Msg" => $tempMsg,
-      ];
-      $this->updateImportRecord($values[count($values) - 1], $importRecordParams);
+      $this->setImportStatus($rowNumber, 'ERROR', $tempMsg);
       array_unshift($values, $tempMsg);
       $errorMessage = NULL;
       return CRM_Import_Parser::ERROR;
     }
-
-    //if user correcting errors by walking back
-    //need to reset status ERROR msg to null
-    //now currently we are having valid data.
-    $importRecordParams = [
-      $statusFieldName => 'NEW',
-    ];
-    $this->updateImportRecord($values[count($values) - 1], $importRecordParams);
+    $this->setImportStatus($rowNumber, 'NEW', '');
 
     return CRM_Import_Parser::VALID;
   }
@@ -425,9 +398,9 @@ class CRM_Contact_Import_Parser_Contact extends CRM_Contact_Import_Parser {
    *
    * @throws \CiviCRM_API3_Exception
    * @throws \CRM_Core_Exception
+   * @throws \API_Exception
    */
   public function import($onDuplicate, &$values, $doGeocodeAddress = FALSE) {
-    $config = CRM_Core_Config::singleton();
     $this->_unparsedStreetAddressContacts = [];
     if (!$doGeocodeAddress) {
       // CRM-5854, reset the geocode method to null to prevent geocoding
@@ -640,16 +613,20 @@ class CRM_Contact_Import_Parser_Contact extends CRM_Contact_Import_Parser {
     //now we create new contact in update/fill mode also.
     $contactID = NULL;
     if ($createNewContact || ($this->_retCode != CRM_Import_Parser::NO_MATCH && $this->_updateWithId)) {
-
-      //CRM-4430, don't carry if not submitted.
-      foreach (['prefix_id', 'suffix_id', 'gender_id'] as $name) {
-        if (!empty($formatted[$name])) {
-          $options = CRM_Contact_BAO_Contact::buildOptions($name, 'get');
-          if (!isset($options[$formatted[$name]])) {
-            $formatted[$name] = CRM_Utils_Array::key((string) $formatted[$name], $options);
-          }
+      // @todo - there are multiple places where formatting is done that need consolidation.
+      // This handles where the label has been passed in and it has gotten this far.
+      // probably a bunch of hard-coded stuff could be removed to rely on this.
+      $fields = Contact::getFields(FALSE)
+        ->addWhere('options', '=', TRUE)
+        ->setLoadOptions(TRUE)
+        ->execute()->indexBy('name');
+      foreach ($fields as $fieldName => $fieldSpec) {
+        if (!empty($formatted[$fieldName])
+          && empty($fieldSpec['options'][$formatted[$fieldName]])) {
+          $formatted[$fieldName] = array_search($formatted[$fieldName], $fieldSpec['options'], TRUE) ?? $formatted[$fieldName];
         }
       }
+      //CRM-4430, don't carry if not submitted.
       if ($this->_updateWithId && !empty($params['id'])) {
         $contactID = $params['id'];
       }
@@ -1607,8 +1584,8 @@ class CRM_Contact_Import_Parser_Contact extends CRM_Contact_Import_Parser {
       }
     }
 
-    $contact = CRM_Contact_BAO_Contact::create($data);
-    $cid = $contact->id;
+    $contact = civicrm_api3('Contact', 'create', $data);
+    $cid = $contact['id'];
 
     CRM_Core_Config::setPermitCacheFlushMode(TRUE);
 
@@ -1915,7 +1892,7 @@ class CRM_Contact_Import_Parser_Contact extends CRM_Contact_Import_Parser {
       return array_keys($possibleMatches['values']);
     }
     if ($possibleMatches['count']) {
-      if (in_array($extIDMatch, array_keys($possibleMatches['values']))) {
+      if (array_key_exists($extIDMatch, $possibleMatches['values'])) {
         return [$extIDMatch];
       }
       throw new CRM_Core_Exception(ts(

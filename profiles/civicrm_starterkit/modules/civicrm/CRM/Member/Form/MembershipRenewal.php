@@ -458,7 +458,7 @@ class CRM_Member_Form_MembershipRenewal extends CRM_Member_Form {
    * @throws \CRM_Core_Exception
    * @throws \CiviCRM_API3_Exception
    */
-  public function postProcess() {
+  public function postProcess(): void {
     // get the submitted form values.
     $this->_params = $this->controller->exportValues($this->_name);
     $this->assignBillingName();
@@ -552,6 +552,8 @@ class CRM_Member_Form_MembershipRenewal extends CRM_Member_Form {
         $contributionRecurID = $contributionRecurParams['contributionRecurID'];
         $paymentParams = array_merge($paymentParams, $contributionRecurParams);
       }
+
+      $paymentParams['invoiceID'] = $paymentParams['invoice_id'];
 
       $payment = $this->_paymentProcessor['object'];
       $result = $payment->doPayment($paymentParams);
@@ -677,6 +679,10 @@ class CRM_Member_Form_MembershipRenewal extends CRM_Member_Form {
       $membership->membership_type_id
     ));
     $this->assign('customValues', $customValues);
+
+    $membership_status = CRM_Member_PseudoConstant::membershipStatus($membership->status_id, NULL, 'label');
+    $this->assign('mem_status', $membership_status);
+    $this->assign('mem_join_date', CRM_Utils_Date::formatDateOnlyLong($membership->join_date));
     $this->assign('mem_start_date', CRM_Utils_Date::formatDateOnlyLong($membership->start_date));
     $this->assign('mem_end_date', CRM_Utils_Date::formatDateOnlyLong($membership->end_date));
     if ($this->_mode) {

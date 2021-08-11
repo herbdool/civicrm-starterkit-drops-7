@@ -4,6 +4,7 @@
   <base>CRM/Contribute</base>
   <class>Contribution</class>
   <name>civicrm_contribution</name>
+  <description>Financial records consisting of transactions, line-items, etc.</description>
   <add>1.3</add>
   <log>true</log>
   <icon>fa-credit-card</icon>
@@ -462,6 +463,7 @@
   </index>
   <field>
     <name>campaign_id</name>
+    <component>CiviCampaign</component>
     <uniqueName>contribution_campaign_id</uniqueName>
     <type>int unsigned</type>
     <title>Campaign ID</title>
@@ -469,7 +471,7 @@
     <comment>The campaign for which this contribution has been triggered.</comment>
     <add>3.4</add>
     <html>
-      <type>Select</type>
+      <type>EntityRef</type>
       <label>Campaign</label>
     </html>
   </field>

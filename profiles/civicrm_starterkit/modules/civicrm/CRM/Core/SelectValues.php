@@ -437,7 +437,7 @@ class CRM_Core_SelectValues {
    *
    * @throws \CRM_Core_Exception
    */
-  public function taxDisplayOptions() {
+  public static function taxDisplayOptions() {
     return [
       'Do_not_show' => ts('Do not show breakdown, only show total - i.e %1', [
         1 => CRM_Utils_Money::format(120),
@@ -587,7 +587,7 @@ class CRM_Core_SelectValues {
       //'{contribution.address_id}' => ts('Address ID'),
       '{contribution.check_number}' => ts('Check Number'),
       '{contribution.campaign}' => ts('Contribution Campaign'),
-    ], CRM_Utils_Token::getCustomFieldTokens('contribution', TRUE));
+    ], CRM_Utils_Token::getCustomFieldTokens('Contribution', TRUE));
   }
 
   /**

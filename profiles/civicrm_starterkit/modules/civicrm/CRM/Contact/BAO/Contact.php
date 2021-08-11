@@ -431,6 +431,48 @@ class CRM_Contact_BAO_Contact extends CRM_Contact_DAO_Contact {
   }
 
   /**
+   * Check if a contact has a name.
+   *
+   * - Individuals need a first_name or last_name
+   * - Organizations need organization_name
+   * - Households need household_name
+   *
+   * @param array $contact
+   * @return bool
+   */
+  public static function hasName(array $contact): bool {
+    $nameFields = [
+      'Individual' => ['first_name', 'last_name'],
+      'Organization' => ['organization_name'],
+      'Household' => ['household_name'],
+    ];
+    // Casting to int filters out the string 'null'
+    $cid = (int) ($contact['id'] ?? NULL);
+    $contactType = $contact['contact_type'] ?? NULL;
+    if (!$contactType && $cid) {
+      $contactType = CRM_Core_DAO::getFieldValue(__CLASS__, $cid, 'contact_type');
+    }
+    if (!$contactType || !isset($nameFields[$contactType])) {
+      throw new CRM_Core_Exception('No contact_type given to ' . __CLASS__ . '::' . __FUNCTION__);
+    }
+    foreach ($nameFields[$contactType] as $field) {
+      if (isset($contact[$field]) && is_string($contact[$field]) && $contact[$field] !== '') {
+        return TRUE;
+      }
+    }
+    // For existing contacts, look up name from database
+    if ($cid) {
+      foreach ($nameFields[$contactType] as $field) {
+        $value = $contact[$field] ?? CRM_Core_DAO::getFieldValue(__CLASS__, $cid, $field);
+        if (isset($value) && $value !== '') {
+          return TRUE;
+        }
+      }
+    }
+    return FALSE;
+  }
+
+  /**
    * Format the output of the create contact function
    *
    * @param CRM_Contact_DAO_Contact[]|array[] $contacts
@@ -3684,6 +3726,35 @@ LEFT JOIN civicrm_address ON ( civicrm_address.contact_id = civicrm_contact.id )
       ['key' => 'external_identifier', 'value' => ts('External ID'), 'type' => 'text'],
       ['key' => 'source', 'value' => ts('Contact Source'), 'type' => 'text'],
     ];
+  }
+
+  /**
+   * @param string $entityName
+   * @param string $action
+   * @param array $record
+   * @param $userID
+   * @return bool
+   * @see CRM_Core_DAO::checkAccess
+   */
+  public static function _checkAccess(string $entityName, string $action, array $record, $userID): bool {
+    switch ($action) {
+      case 'create':
+        return CRM_Core_Permission::check('add contacts', $userID);
+
+      case 'get':
+        $actionType = CRM_Core_Permission::VIEW;
+        break;
+
+      case 'delete':
+        $actionType = CRM_Core_Permission::DELETE;
+        break;
+
+      default:
+        $actionType = CRM_Core_Permission::EDIT;
+        break;
+    }
+
+    return CRM_Contact_BAO_Contact_Permission::allow($record['id'], $actionType, $userID);
   }
 
 }

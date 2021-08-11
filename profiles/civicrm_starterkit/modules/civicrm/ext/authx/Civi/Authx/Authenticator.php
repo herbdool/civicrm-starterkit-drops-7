@@ -158,7 +158,7 @@ class Authenticator {
 
       // If any one of these passes, then we allow the authentication.
       $passGuard = [];
-      $passGuard[] = in_array('site_key', $useGuards) && defined('CIVICRM_SITE_KEY') && hash_equals(CIVICRM_SITE_KEY, $tgt->siteKey);
+      $passGuard[] = in_array('site_key', $useGuards) && defined('CIVICRM_SITE_KEY') && hash_equals(CIVICRM_SITE_KEY, (string) $tgt->siteKey);
       $passGuard[] = in_array('perm', $useGuards) && isset($perms[$tgt->credType]) && \CRM_Core_Permission::check($perms[$tgt->credType], $tgt->contactId);
       // JWTs are signed by us. We don't need user to prove that they're allowed to use them.
       $passGuard[] = ($tgt->credType === 'jwt');
@@ -213,6 +213,7 @@ class Authenticator {
     // Post-login Civi stuff...
 
     $session = \CRM_Core_Session::singleton();
+    $session->set('authx', $tgt->createRedacted());
     $session->set('ufID', $tgt->userId);
     $session->set('userID', $tgt->contactId);
 
@@ -346,6 +347,28 @@ class AuthenticatorTarget {
    */
   public function hasPrincipal(): bool {
     return !empty($this->userId) || !empty($this->contactId);
+  }
+
+  /**
+   * Create a variant of the authentication record which omits any secret values. It may be
+   * useful to examining metadata and outcomes.
+   *
+   * The redacted version may be retained in the (real or fake) session and consulted by more
+   * fine-grained access-controls.
+   *
+   * @return array
+   */
+  public function createRedacted(): array {
+    return [
+      // omit: cred
+      // omit: siteKey
+      'flow' => $this->flow,
+      'credType' => $this->credType,
+      'jwt' => $this->jwt,
+      'useSession' => $this->useSession,
+      'userId' => $this->userId,
+      'contactId' => $this->contactId,
+    ];
   }
 
 }

@@ -25,6 +25,7 @@ class PropertyBag implements \ArrayAccess {
   protected $props = ['default' => []];
 
   protected static $propMap = [
+    'amount'                      => TRUE,
     'billingStreetAddress'        => TRUE,
     'billingSupplementalAddress1' => TRUE,
     'billingSupplementalAddress2' => TRUE,
@@ -62,6 +63,8 @@ class PropertyBag implements \ArrayAccess {
     'frequency_interval'          => 'recurFrequencyInterval',
     'recurFrequencyUnit'          => TRUE,
     'frequency_unit'              => 'recurFrequencyUnit',
+    'recurInstallments'           => TRUE,
+    'installments'                => 'recurInstallments',
     'subscriptionId'              => 'recurProcessorID',
     'recurProcessorID'            => TRUE,
     'transactionID'               => TRUE,
@@ -75,8 +78,29 @@ class PropertyBag implements \ArrayAccess {
    * @var bool
    * Temporary, internal variable to help ease transition to PropertyBag.
    * Used by cast() to suppress legacy warnings.
+   * For paymentprocessors that have not converted to propertyBag we need to support "legacy" properties - eg. "is_recur"
+   *   without warnings. Setting this allows us to pass a propertyBag into doPayment() and expect it to "work" with
+   *   existing payment processors.
    */
-  protected $suppressLegacyWarnings = FALSE;
+  protected $suppressLegacyWarnings = TRUE;
+
+  /**
+   * Get the value of the suppressLegacyWarnings parameter
+   * @return bool
+   */
+  public function getSuppressLegacyWarnings() {
+    return $this->suppressLegacyWarnings;
+  }
+
+  /**
+   * Set the suppressLegacyWarnings parameter - useful for unit tests.
+   * Eg. you could set to FALSE for unit tests on a paymentprocessor to capture use of legacy keys in that processor
+   * code.
+   * @param bool $suppressLegacyWarnings
+   */
+  public function setSuppressLegacyWarnings(bool $suppressLegacyWarnings) {
+    $this->suppressLegacyWarnings = $suppressLegacyWarnings;
+  }
 
   /**
    * Get the property bag.
@@ -129,11 +153,13 @@ class PropertyBag implements \ArrayAccess {
     }
     catch (InvalidArgumentException $e) {
 
-      CRM_Core_Error::deprecatedFunctionWarning(
-        "proper getCustomProperty('$offset') for non-core properties. "
-        . $e->getMessage(),
-        "PropertyBag array access to get '$offset'"
-      );
+      if (!$this->getSuppressLegacyWarnings()) {
+        CRM_Core_Error::deprecatedFunctionWarning(
+          "proper getCustomProperty('$offset') for non-core properties. "
+          . $e->getMessage(),
+          "PropertyBag array access to get '$offset'"
+        );
+      }
 
       try {
         return $this->getCustomProperty($offset, 'default');
@@ -148,10 +174,12 @@ class PropertyBag implements \ArrayAccess {
       }
     }
 
-    CRM_Core_Error::deprecatedFunctionWarning(
-      "get" . ucfirst($offset) . "()",
-      "PropertyBag array access for core property '$offset'"
-    );
+    if (!$this->getSuppressLegacyWarnings()) {
+      CRM_Core_Error::deprecatedFunctionWarning(
+        "get" . ucfirst($offset) . "()",
+        "PropertyBag array access for core property '$offset'"
+      );
+    }
     return $this->get($prop, 'default');
   }
 
@@ -241,7 +269,7 @@ class PropertyBag implements \ArrayAccess {
       throw new \InvalidArgumentException("Unknown property '$prop'.");
     }
     // Remaining case is legacy name that's been translated.
-    if (!$this->suppressLegacyWarnings) {
+    if (!$this->getSuppressLegacyWarnings()) {
       CRM_Core_Error::deprecatedFunctionWarning("Canonical property name '$newName'", "Legacy property name '$prop'");
     }
 
@@ -272,7 +300,7 @@ class PropertyBag implements \ArrayAccess {
    *
    * @return PropertyBag $this object so you can chain set setters.
    */
-  protected function set($prop, $label = 'default', $value) {
+  protected function set($prop, $label, $value) {
     $this->props[$label][$prop] = $value;
     return $this;
   }
@@ -317,13 +345,14 @@ class PropertyBag implements \ArrayAccess {
     // Suppress legacy warnings for merging an array of data as this
     // suits our migration plan at this moment. Future behaviour may differ.
     // @see https://github.com/civicrm/civicrm-core/pull/17643
-    $this->suppressLegacyWarnings = TRUE;
+    $suppressLegacyWarnings = $this->getSuppressLegacyWarnings();
+    $this->setSuppressLegacyWarnings(TRUE);
     foreach ($data as $key => $value) {
       if ($value !== NULL && $value !== '') {
         $this->offsetSet($key, $value);
       }
     }
-    $this->suppressLegacyWarnings = FALSE;
+    $this->setSuppressLegacyWarnings($suppressLegacyWarnings);
   }
 
   /**
@@ -988,6 +1017,31 @@ class PropertyBag implements \ArrayAccess {
       throw new \InvalidArgumentException("recurFrequencyUnit must be day|week|month|year");
     }
     return $this->set('recurFrequencyUnit', $label, $recurFrequencyUnit);
+  }
+
+  /**
+   * @param string $label
+   *
+   * @return int
+   */
+  public function getRecurInstallments($label = 'default') {
+    return $this->get('recurInstallments', $label);
+  }
+
+  /**
+   * @param int $recurInstallments
+   * @param string $label
+   *
+   * @return \Civi\Payment\PropertyBag
+   * @throws \CRM_Core_Exception
+   */
+  public function setRecurInstallments($recurInstallments, $label = 'default') {
+    // Counts zero as positive which is ok - means no installments
+    if (!\CRM_Utils_Type::validate($recurInstallments, 'Positive')) {
+      throw new InvalidArgumentException('recurInstallments must be 0 or a positive integer');
+    }
+
+    return $this->set('recurInstallments', $label, (int) $recurInstallments);
   }
 
   /**

@@ -177,7 +177,7 @@ WHERE  id IN ( $idString )
     }
 
     if (!$ts) {
-      $ts = time();
+      $ts = CRM_Utils_Time::time();
     }
 
     if (!$live) {
@@ -241,7 +241,7 @@ WHERE  id IN ( $idString )
    */
   public static function createCurrentEmployerRelationship($contactID, $organization, $previousEmployerID = NULL, $newContact = FALSE) {
     //if organization name is passed. CRM-15368,CRM-15547
-    if ($organization && !is_numeric($organization)) {
+    if (!CRM_Utils_System::isNull($organization) && !is_numeric($organization)) {
       $dupeIDs = CRM_Contact_BAO_Contact::getDuplicateContacts(['organization_name' => $organization], 'Organization', 'Unsupervised', [], FALSE);
 
       if (is_array($dupeIDs) && !empty($dupeIDs)) {
@@ -600,7 +600,7 @@ LEFT JOIN  civicrm_email ce ON ( ce.contact_id=c.id AND ce.is_primary = 1 )
         }
       }
       if (!empty($originalId) && array_key_exists('merge', $hasPermissions)) {
-        $rgBao = new CRM_Dedupe_BAO_RuleGroup();
+        $rgBao = new CRM_Dedupe_BAO_DedupeRuleGroup();
         $rgBao->contact_type = $dao->contact_type;
         $rgBao->used = 'Supervised';
         if ($rgBao->find(TRUE)) {

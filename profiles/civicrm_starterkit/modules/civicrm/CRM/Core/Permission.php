@@ -69,24 +69,24 @@ class CRM_Core_Permission {
    * Ex 1: Must have 'access CiviCRM'
    * (string) 'access CiviCRM'
    *
-   *  Ex 2: Must have 'access CiviCRM' and 'access Ajax API'
-   *    ['access CiviCRM', 'access Ajax API']
+   *  Ex 2: Must have 'access CiviCRM' and 'access AJAX API'
+   *    ['access CiviCRM', 'access AJAX API']
    *
-   * Ex 3: Must have 'access CiviCRM' or 'access Ajax API'
+   * Ex 3: Must have 'access CiviCRM' or 'access AJAX API'
    *   [
-   *     ['access CiviCRM', 'access Ajax API'],
+   *     ['access CiviCRM', 'access AJAX API'],
    *   ],
    *
-   * Ex 4: Must have 'access CiviCRM' or 'access Ajax API' AND 'access CiviEvent'
+   * Ex 4: Must have 'access CiviCRM' or 'access AJAX API' AND 'access CiviEvent'
    *   [
-   *     ['access CiviCRM', 'access Ajax API'],
+   *     ['access CiviCRM', 'access AJAX API'],
    *     'access CiviEvent',
    *   ],
    *
    * Note that in permissions.php this is keyed by the action eg.
    *   (access Civi || access AJAX) && (access CiviEvent || access CiviContribute)
    *   'myaction' => [
-   *     ['access CiviCRM', 'access Ajax API'],
+   *     ['access CiviCRM', 'access AJAX API'],
    *     ['access CiviEvent', 'access CiviContribute']
    *   ],
    *
@@ -591,7 +591,7 @@ class CRM_Core_Permission {
     $permissions = self::getCoreAndComponentPermissions($all);
 
     // Add any permissions defined in hook_civicrm_permission implementations.
-    $module_permissions = CRM_Core_Config::singleton()->userPermissionClass->getAllModulePermissions(TRUE, $permissions);
+    $module_permissions = CRM_Core_Config::singleton()->userPermissionClass->getAllModulePermissions(TRUE);
     $permissions = array_merge($permissions, $module_permissions);
     if (!$descriptions) {
       foreach ($permissions as $name => $attr) {
@@ -1136,6 +1136,8 @@ class CRM_Core_Permission {
     ];
     $permissions['line_item'] = $permissions['contribution'];
 
+    $permissions['financial_item'] = $permissions['contribution'];
+
     // Payment permissions
     $permissions['payment'] = [
       'get' => [
@@ -1484,6 +1486,10 @@ class CRM_Core_Permission {
       'default' => [
         'access CiviCRM',
       ],
+    ];
+
+    $permissions['saved_search'] = [
+      'default' => ['administer CiviCRM data'],
     ];
 
     // Profile permissions

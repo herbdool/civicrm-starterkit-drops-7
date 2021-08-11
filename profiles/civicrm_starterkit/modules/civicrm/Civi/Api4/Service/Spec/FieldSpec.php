@@ -10,117 +10,139 @@
  +--------------------------------------------------------------------+
  */
 
-/**
- *
- * @package CRM
- * @copyright CiviCRM LLC https://civicrm.org/licensing
- */
-
-
 namespace Civi\Api4\Service\Spec;
-
-use Civi\Api4\Utils\CoreUtil;
 
 class FieldSpec {
   /**
    * @var mixed
    */
-  protected $defaultValue;
+  public $defaultValue;
 
   /**
    * @var string
    */
-  protected $name;
+  public $name;
 
   /**
    * @var string
    */
-  protected $label;
+  public $label;
 
   /**
    * @var string
    */
-  protected $title;
+  public $title;
 
   /**
    * @var string
    */
-  protected $entity;
+  public $type = 'Extra';
 
   /**
    * @var string
    */
-  protected $description;
+  public $entity;
+
+  /**
+   * @var string
+   */
+  public $description;
 
   /**
    * @var bool
    */
-  protected $required = FALSE;
+  public $required = FALSE;
 
   /**
    * @var bool
    */
-  protected $requiredIf;
+  public $requiredIf;
 
   /**
    * @var array|bool
    */
-  protected $options;
+  public $options;
 
   /**
    * @var string
    */
-  protected $dataType;
+  public $tableName;
+
+  /**
+   * @var callable
+   */
+  private $optionsCallback;
 
   /**
    * @var string
    */
-  protected $inputType;
+  public $dataType;
+
+  /**
+   * @var string
+   */
+  public $inputType;
 
   /**
    * @var array
    */
-  protected $inputAttrs = [];
+  public $inputAttrs = [];
+
+  /**
+   * @var string[]
+   */
+  public $operators;
 
   /**
    * @var string
    */
-  protected $fkEntity;
+  public $fkEntity;
 
   /**
    * @var int
    */
-  protected $serialize;
+  public $serialize;
 
   /**
    * @var string
    */
-  protected $helpPre;
+  public $helpPre;
 
   /**
    * @var string
    */
-  protected $helpPost;
+  public $helpPost;
 
   /**
    * @var array
    */
-  protected $permission;
+  public $permission;
 
   /**
    * @var string
    */
-  protected $columnName;
+  public $columnName;
 
   /**
    * @var bool
    */
-  protected $readonly = FALSE;
+  public $readonly = FALSE;
 
   /**
    * @var callable[]
    */
-  protected $outputFormatters = [];
+  public $outputFormatters;
+
+  /**
+   * @var callable
+   */
+  public $sqlRenderer;
+
+  /**
+   * @var callable[]
+   */
+  public $sqlFilters;
+
 
   /**
    * Aliases for the valid data types
@@ -140,7 +162,7 @@ class FieldSpec {
    */
   public function __construct($name, $entity, $dataType = 'String') {
     $this->entity = $entity;
-    $this->name = $this->columnName = $name;
+    $this->name = $name;
     $this->setDataType($dataType);
   }
 
@@ -212,6 +234,17 @@ class FieldSpec {
    */
   public function setTitle($title) {
     $this->title = $title;
+
+    return $this;
+  }
+
+  /**
+   * @param string $entity
+   *
+   * @return $this
+   */
+  public function setEntity($entity) {
+    $this->entity = $entity;
 
     return $this;
   }
@@ -372,10 +405,13 @@ class FieldSpec {
   }
 
   /**
-   * @return callable[]
+   * @param string[] $operators
+   * @return $this
    */
-  public function getOutputFormatters() {
-    return $this->outputFormatters;
+  public function setOperators($operators) {
+    $this->operators = $operators;
+
+    return $this;
   }
 
   /**
@@ -393,33 +429,65 @@ class FieldSpec {
    * @return $this
    */
   public function addOutputFormatter($outputFormatter) {
+    if (!$this->outputFormatters) {
+      $this->outputFormatters = [];
+    }
     $this->outputFormatters[] = $outputFormatter;
 
     return $this;
   }
 
   /**
-   * @return bool
+   * @param callable $sqlRenderer
+   * @return $this
    */
-  public function getreadonly() {
-    return $this->readonly;
+  public function setSqlRenderer($sqlRenderer) {
+    $this->sqlRenderer = $sqlRenderer;
+
+    return $this;
+  }
+
+  /**
+   * @param callable[] $sqlFilters
+   * @return $this
+   */
+  public function setSqlFilters($sqlFilters) {
+    $this->sqlFilters = $sqlFilters;
+
+    return $this;
+  }
+
+  /**
+   * @param callable $sqlFilter
+   * @return $this
+   */
+  public function addSqlFilter($sqlFilter) {
+    if (!$this->sqlFilters) {
+      $this->sqlFilters = [];
+    }
+    $this->sqlFilters[] = $sqlFilter;
+
+    return $this;
+  }
+
+  /**
+   * @param string $type
+   * @return $this
+   */
+  public function setType(string $type) {
+    $this->type = $type;
+
+    return $this;
   }
 
   /**
    * @param bool $readonly
    * @return $this
    */
-  public function setreadonly($readonly) {
+  public function setReadonly($readonly) {
     $this->readonly = (bool) $readonly;
 
     return $this;
-  }
-
-  /**
-   * @return string|NULL
-   */
-  public function getHelpPre() {
-    return $this->helpPre;
   }
 
   /**
@@ -430,17 +498,27 @@ class FieldSpec {
   }
 
   /**
-   * @return string|NULL
-   */
-  public function getHelpPost() {
-    return $this->helpPost;
-  }
-
-  /**
    * @param string|NULL $helpPost
    */
   public function setHelpPost($helpPost) {
     $this->helpPost = is_string($helpPost) && strlen($helpPost) ? $helpPost : NULL;
+  }
+
+  /**
+   * @param string $tableName
+   * @return $this
+   */
+  public function setTableName($tableName) {
+    $this->tableName = $tableName;
+
+    return $this;
+  }
+
+  /**
+   * @return string
+   */
+  public function getTableName() {
+    return $this->tableName;
   }
 
   /**
@@ -458,110 +536,19 @@ class FieldSpec {
   /**
    * @param array $values
    * @param array|bool $return
+   * @param bool $checkPermissions
    * @return array
    */
-  public function getOptions($values = [], $return = TRUE) {
-    if (!isset($this->options) || $this->options === TRUE) {
-      $fieldName = $this->getName();
-
-      if ($this instanceof CustomFieldSpec) {
-        // buildOptions relies on the custom_* type of field names
-        $fieldName = sprintf('custom_%d', $this->getCustomFieldId());
-      }
-
-      // BAO::buildOptions returns a single-dimensional list, we call that first because of the hook contract,
-      // @see CRM_Utils_Hook::fieldOptions
-      // We then supplement the data with additional properties if requested.
-      $bao = CoreUtil::getBAOFromApiName($this->getEntity());
-      $optionLabels = $bao::buildOptions($fieldName, NULL, $values);
-
-      if (!is_array($optionLabels) || !$optionLabels) {
-        $this->options = FALSE;
+  public function getOptions($values = [], $return = TRUE, $checkPermissions = TRUE) {
+    if (!isset($this->options)) {
+      if ($this->optionsCallback) {
+        $this->options = ($this->optionsCallback)($this, $values, $return, $checkPermissions);
       }
       else {
-        $this->options = \CRM_Utils_Array::makeNonAssociative($optionLabels, 'id', 'label');
-        if (is_array($return)) {
-          self::addOptionProps($bao, $fieldName, $values, $return);
-        }
+        $this->options = FALSE;
       }
     }
     return $this->options;
-  }
-
-  /**
-   * Augment the 2 values returned by BAO::buildOptions (id, label) with extra properties (name, description, color, icon, etc).
-   *
-   * We start with BAO::buildOptions in order to respect hooks which may be adding/removing items, then we add the extra data.
-   *
-   * @param \CRM_Core_DAO $baoName
-   * @param string $fieldName
-   * @param array $values
-   * @param array $return
-   */
-  private function addOptionProps($baoName, $fieldName, $values, $return) {
-    // FIXME: For now, call the buildOptions function again and then combine the arrays. Not an ideal approach.
-    // TODO: Teach CRM_Core_Pseudoconstant to always load multidimensional option lists so we can get more properties like 'color' and 'icon',
-    // however that might require a change to the hook_civicrm_fieldOptions signature so that's a bit tricky.
-    if (in_array('name', $return)) {
-      $props['name'] = $baoName::buildOptions($fieldName, 'validate', $values);
-    }
-    $return = array_diff($return, ['id', 'name', 'label']);
-    // CRM_Core_Pseudoconstant doesn't know how to fetch extra stuff like icon, description, color, etc., so we have to invent that wheel here...
-    if ($return) {
-      $optionIds = implode(',', array_column($this->options, 'id'));
-      $optionIndex = array_flip(array_column($this->options, 'id'));
-      if ($this instanceof CustomFieldSpec) {
-        $optionGroupId = \CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomField', $this->getCustomFieldId(), 'option_group_id');
-      }
-      else {
-        $dao = new $baoName();
-        $fieldSpec = $dao->getFieldSpec($fieldName);
-        $pseudoconstant = $fieldSpec['pseudoconstant'] ?? NULL;
-        $optionGroupName = $pseudoconstant['optionGroupName'] ?? NULL;
-        $optionGroupId = $optionGroupName ? \CRM_Core_DAO::getFieldValue('CRM_Core_DAO_OptionGroup', $optionGroupName, 'id', 'name') : NULL;
-      }
-      if (!empty($optionGroupId)) {
-        $extraStuff = \CRM_Core_BAO_OptionValue::getOptionValuesArray($optionGroupId);
-        $keyColumn = $pseudoconstant['keyColumn'] ?? 'value';
-        foreach ($extraStuff as $item) {
-          if (isset($optionIndex[$item[$keyColumn]])) {
-            foreach ($return as $ret) {
-              // Note: our schema is inconsistent about whether `description` fields allow html,
-              // but it's usually assumed to be plain text, so we strip_tags() to standardize it.
-              $this->options[$optionIndex[$item[$keyColumn]]][$ret] = ($ret === 'description' && isset($item[$ret])) ? strip_tags($item[$ret]) : $item[$ret] ?? NULL;
-            }
-          }
-        }
-      }
-      else {
-        // Fetch the abbr if requested using context: abbreviate
-        if (in_array('abbr', $return)) {
-          $props['abbr'] = $baoName::buildOptions($fieldName, 'abbreviate', $values);
-          $return = array_diff($return, ['abbr']);
-        }
-        // Fetch anything else (color, icon, description)
-        if ($return && !empty($pseudoconstant['table']) && \CRM_Utils_Rule::commaSeparatedIntegers($optionIds)) {
-          $sql = "SELECT * FROM {$pseudoconstant['table']} WHERE id IN (%1)";
-          $query = \CRM_Core_DAO::executeQuery($sql, [1 => [$optionIds, 'CommaSeparatedIntegers']]);
-          while ($query->fetch()) {
-            foreach ($return as $ret) {
-              if (property_exists($query, $ret)) {
-                // Note: our schema is inconsistent about whether `description` fields allow html,
-                // but it's usually assumed to be plain text, so we strip_tags() to standardize it.
-                $this->options[$optionIndex[$query->id]][$ret] = $ret === 'description' ? strip_tags($query->$ret) : $query->$ret;
-              }
-            }
-          }
-        }
-      }
-    }
-    if (isset($props)) {
-      foreach ($this->options as &$option) {
-        foreach ($props as $name => $prop) {
-          $option[$name] = $prop[$option['id']] ?? NULL;
-        }
-      }
-    }
   }
 
   /**
@@ -571,6 +558,16 @@ class FieldSpec {
    */
   public function setOptions($options) {
     $this->options = $options;
+    return $this;
+  }
+
+  /**
+   * @param callable $callback
+   *
+   * @return $this
+   */
+  public function setOptionsCallback($callback) {
+    $this->optionsCallback = $callback;
     return $this;
   }
 
@@ -593,33 +590,46 @@ class FieldSpec {
   }
 
   /**
-   * @return string
+   * @return string|NULL
    */
-  public function getColumnName() {
+  public function getColumnName(): ?string {
     return $this->columnName;
   }
 
   /**
-   * @param string $columnName
+   * @param string|null $columnName
    *
    * @return $this
    */
-  public function setColumnName($columnName) {
+  public function setColumnName(?string $columnName) {
     $this->columnName = $columnName;
     return $this;
   }
 
   /**
-   * @param array $values
+   * Gets all public variables, converted to snake_case
+   *
    * @return array
    */
-  public function toArray($values = []) {
-    $ret = [];
-    foreach (get_object_vars($this) as $key => $val) {
-      $key = strtolower(preg_replace('/(?=[A-Z])/', '_$0', $key));
-      if (!$values || in_array($key, $values)) {
-        $ret[$key] = $val;
+  public function toArray() {
+    // Anonymous class will only have access to public vars
+    $getter = new class {
+
+      function getPublicVars($object) {
+        return get_object_vars($object);
       }
+
+    };
+
+    // If getOptions was never called, make options a boolean
+    if (!isset($this->options)) {
+      $this->options = isset($this->optionsCallback);
+    }
+
+    $ret = [];
+    foreach ($getter->getPublicVars($this) as $key => $val) {
+      $key = strtolower(preg_replace('/(?=[A-Z])/', '_$0', $key));
+      $ret[$key] = $val;
     }
     return $ret;
   }

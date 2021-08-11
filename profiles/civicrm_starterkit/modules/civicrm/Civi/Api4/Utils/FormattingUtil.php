@@ -10,13 +10,6 @@
  +--------------------------------------------------------------------+
  */
 
-/**
- *
- * @package CRM
- * @copyright CiviCRM LLC https://civicrm.org/licensing
- */
-
-
 namespace Civi\Api4\Utils;
 
 use Civi\Api4\Query\SqlExpression;
@@ -25,12 +18,18 @@ require_once 'api/v3/utils.php';
 
 class FormattingUtil {
 
+  /**
+   * @var string[]
+   */
   public static $pseudoConstantContexts = [
     'name' => 'validate',
     'abbr' => 'abbreviate',
     'label' => 'get',
   ];
 
+  /**
+   * @var string[]
+   */
   public static $pseudoConstantSuffixes = ['name', 'abbr', 'label', 'color', 'description', 'icon'];
 
   /**
@@ -201,10 +200,9 @@ class FormattingUtil {
         $fieldName = \CRM_Utils_Array::first($fieldExpr->getFields());
         $field = $fieldName && isset($fields[$fieldName]) ? $fields[$fieldName] : NULL;
         $dataType = $field['data_type'] ?? ($fieldName == 'id' ? 'Integer' : NULL);
-        // If Sql Function e.g. GROUP_CONCAT or COUNT wants to do its own formatting, apply and skip dataType conversion
+        // If Sql Function e.g. GROUP_CONCAT or COUNT wants to do its own formatting, apply
         if (method_exists($fieldExpr, 'formatOutputValue') && is_string($value)) {
-          $result[$key] = $value = $fieldExpr->formatOutputValue($value);
-          $dataType = NULL;
+          $result[$key] = $value = $fieldExpr->formatOutputValue($value, $dataType);
         }
         if (!$field) {
           continue;

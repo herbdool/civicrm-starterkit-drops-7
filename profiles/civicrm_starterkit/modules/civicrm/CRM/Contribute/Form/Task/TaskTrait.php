@@ -114,7 +114,9 @@ trait CRM_Contribute_Form_Task_TaskTrait {
    * @throws \CRM_Core_Exception
    */
   protected function calculateIDS() {
-    if ($this->controller->get('id')) {
+    // contact search forms use the id property to store the selected uf_group_id
+    // rather than entity (contribution) IDs, so don't use the property in that case
+    if (!$this->controller instanceof CRM_Contact_Controller_Search && $this->controller->get('id')) {
       return explode(',', $this->controller->get('id'));
     }
     $ids = $this->getSelectedIDs($this->getSearchFormValues());
@@ -136,6 +138,15 @@ trait CRM_Contribute_Form_Task_TaskTrait {
    */
   public function getComponentClause(): string {
     return ' civicrm_contribution.id IN ( ' . implode(',', $this->getIDs()) . ' ) ';
+  }
+
+  /**
+   * Is only one entity being processed?
+   *
+   * @return false
+   */
+  public function isSingle() {
+    return count($this->getIDs()) === 1;
   }
 
 }

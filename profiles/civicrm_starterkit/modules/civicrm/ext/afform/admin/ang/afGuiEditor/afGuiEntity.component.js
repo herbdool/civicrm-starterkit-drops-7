@@ -26,6 +26,10 @@
         return afGui.meta.entities[getEntityType()];
       };
 
+      $scope.getAdminTpl = function() {
+        return $scope.getMeta().admin_tpl || '~/afGuiEditor/entityConfig/Generic.html';
+      };
+
       $scope.getField = afGui.getField;
 
       $scope.valuesFields = function() {
@@ -68,7 +72,9 @@
 
         function filterFields(fields) {
           return _.transform(fields, function(fieldList, field) {
-            if (!search || _.contains(field.name, search) || _.contains(field.label.toLowerCase(), search)) {
+            if (!field.readonly &&
+              (!search || _.contains(field.name, search) || _.contains(field.label.toLowerCase(), search))
+            ) {
               fieldList.push(fieldDefaults(field));
             }
           }, []);
