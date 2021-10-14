@@ -347,6 +347,7 @@ class CRM_Core_Form extends HTML_QuickForm_Page {
       'settingPath',
       'autocomplete',
       'validContact',
+      'email',
     ];
 
     foreach ($rules as $rule) {
@@ -2741,11 +2742,25 @@ class CRM_Core_Form extends HTML_QuickForm_Page {
    *
    * @return mixed|null
    */
-  protected function getSubmittedValue(string $fieldName) {
+  public function getSubmittedValue(string $fieldName) {
     if (empty($this->exportedValues)) {
       $this->exportedValues = $this->controller->exportValues($this->_name);
     }
     return $this->exportedValues[$fieldName] ?? NULL;
+  }
+
+  /**
+   * Get the active UFGroups (profiles) on this form
+   * Many forms load one or more UFGroups (profiles).
+   * This provides a standard function to retrieve the IDs of those profiles from the form
+   * so that you can implement things such as "is is_captcha field set on any of the active profiles on this form?"
+   *
+   * NOT SUPPORTED FOR USE OUTSIDE CORE EXTENSIONS - Added for reCAPTCHA core extension.
+   *
+   * @return array
+   */
+  public function getUFGroupIDs() {
+    return [];
   }
 
 }

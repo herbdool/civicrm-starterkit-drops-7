@@ -35,6 +35,8 @@ use Civi\Api4\Utils\ReflectionUtils;
  */
 abstract class AbstractAction implements \ArrayAccess {
 
+  use \Civi\Schema\Traits\MagicGetterSetterTrait;
+
   /**
    * Api version number; cannot be changed.
    *
@@ -251,12 +253,9 @@ abstract class AbstractAction implements \ArrayAccess {
    */
   public function getParams() {
     $params = [];
-    foreach ($this->reflect()->getProperties(\ReflectionProperty::IS_PROTECTED) as $property) {
-      $name = $property->getName();
-      // Skip variables starting with an underscore
-      if ($name[0] != '_') {
-        $params[$name] = $this->$name;
-      }
+    $magicProperties = $this->getMagicProperties();
+    foreach ($magicProperties as $name => $bool) {
+      $params[$name] = $this->$name;
     }
     return $params;
   }
@@ -310,14 +309,14 @@ abstract class AbstractAction implements \ArrayAccess {
    * @return bool
    */
   public function paramExists($param) {
-    return array_key_exists($param, $this->getParams());
+    return array_key_exists($param, $this->getMagicProperties());
   }
 
   /**
    * @return array
    */
   protected function getParamDefaults() {
-    return array_intersect_key($this->reflect()->getDefaultProperties(), $this->getParams());
+    return array_intersect_key($this->reflect()->getDefaultProperties(), $this->getMagicProperties());
   }
 
   /**
@@ -494,6 +493,7 @@ abstract class AbstractAction implements \ArrayAccess {
         if ($field) {
           $optionFields[$fieldName] = [
             'val' => $record[$expr],
+            'expr' => $expr,
             'field' => $field,
             'suffix' => substr($expr, $suffix + 1),
             'depends' => $field['input_attrs']['control_field'] ?? NULL,
@@ -508,7 +508,7 @@ abstract class AbstractAction implements \ArrayAccess {
     });
     // Replace pseudoconstants. Note this is a reverse lookup as we are evaluating input not output.
     foreach ($optionFields as $fieldName => $info) {
-      $options = FormattingUtil::getPseudoconstantList($info['field'], $info['suffix'], $record, 'create');
+      $options = FormattingUtil::getPseudoconstantList($info['field'], $info['expr'], $record, 'create');
       $record[$fieldName] = FormattingUtil::replacePseudoconstant($options, $info['val'], TRUE);
     }
   }

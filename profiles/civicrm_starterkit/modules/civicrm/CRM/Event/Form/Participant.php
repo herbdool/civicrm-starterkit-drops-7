@@ -1477,8 +1477,6 @@ class CRM_Event_Form_Participant extends CRM_Contribute_Form_AbstractEditPayment
         if ($this->_isPaidEvent) {
           // fix amount for each of participants ( for bulk mode )
           $eventAmount = [];
-          $invoiceSettings = Civi::settings()->get('contribution_invoice_settings');
-          $invoicing = $invoiceSettings['invoicing'] ?? NULL;
           $totalTaxAmount = 0;
 
           //add dataArray in the receipts in ADD and UPDATE condition
@@ -1489,7 +1487,7 @@ class CRM_Event_Form_Participant extends CRM_Contribute_Form_AbstractEditPayment
           elseif ($this->_action & CRM_Core_Action::UPDATE) {
             $line = $this->_values['line_items'];
           }
-          if ($invoicing) {
+          if (Civi::settings()->get('invoicing')) {
             foreach ($line as $key => $value) {
               if (isset($value['tax_amount'])) {
                 $totalTaxAmount += $value['tax_amount'];
@@ -1548,7 +1546,7 @@ class CRM_Event_Form_Participant extends CRM_Contribute_Form_AbstractEditPayment
         );
         $prefixValue = Civi::settings()->get('contribution_invoice_settings');
         $invoicing = $prefixValue['invoicing'] ?? NULL;
-        if (!empty($taxAmt) && (isset($invoicing) && isset($prefixValue['is_email_pdf']))) {
+        if (Civi::settings()->get('invoice_is_email_pdf')) {
           $sendTemplateParams['isEmailPdf'] = TRUE;
           $sendTemplateParams['contributionId'] = $contributionId;
         }

@@ -9,7 +9,9 @@
  +--------------------------------------------------------------------+
  */
 
+use Civi\Api4\LineItem;
 use Civi\Api4\PriceField;
+use Civi\Api4\PriceFieldValue;
 use Civi\Api4\PriceSet;
 
 /**
@@ -59,11 +61,84 @@ class CRM_Financial_BAO_Order {
   protected $overrideFinancialTypeID;
 
   /**
+   * Overridable financial type id.
+   *
+   * When this is set only this financial type will be overridden.
+   *
+   * This is relevant to repeat transactions where we want to
+   * override the type on the line items if it a different financial type has
+   * been saved against the recurring contribution. However, it the line item
+   * financial type differs from the contribution financial type then we
+   * treat this as deliberately uncoupled and don't flow through changes
+   * in financial type down to the line items.
+   *
+   * This is covered in testRepeatTransactionUpdatedFinancialTypeAndNotEquals.
+   *
+   * @var int
+   */
+  protected $overridableFinancialTypeID;
+
+  /**
+   * Get overridable financial type id.
+   *
+   * If only one financial type id can be overridden at the line item level
+   * then get it here, otherwise NULL.
+   *
+   * @return int|null
+   */
+  public function getOverridableFinancialTypeID(): ?int {
+    return $this->overridableFinancialTypeID;
+  }
+
+  /**
+   * Set overridable financial type id.
+   *
+   * If only one financial type id can be overridden at the line item level
+   * then set it here.
+   *
+   * @param int|null $overridableFinancialTypeID
+   */
+  public function setOverridableFinancialTypeID(?int $overridableFinancialTypeID): void {
+    $this->overridableFinancialTypeID = $overridableFinancialTypeID;
+  }
+
+  /**
    * Financial type id to use for any lines where is is not provided.
    *
    * @var int
    */
   protected $defaultFinancialTypeID;
+
+  /**
+   * ID of a contribution to be used as a template.
+   *
+   * @var int
+   */
+  protected $templateContributionID;
+
+  /**
+   * Should we permit the line item financial type to be overridden when there is more than one line.
+   *
+   * Historically the answer is 'yes' for v3 order api and 'no' for repeattransaction
+   * and backoffice forms.
+   *
+   * @var bool
+   */
+  protected $isPermitOverrideFinancialTypeForMultipleLines = TRUE;
+
+  /**
+   * @return bool
+   */
+  public function isPermitOverrideFinancialTypeForMultipleLines(): bool {
+    return $this->isPermitOverrideFinancialTypeForMultipleLines;
+  }
+
+  /**
+   * @param bool $isPermitOverrideFinancialTypeForMultipleLines
+   */
+  public function setIsPermitOverrideFinancialTypeForMultipleLines(bool $isPermitOverrideFinancialTypeForMultipleLines): void {
+    $this->isPermitOverrideFinancialTypeForMultipleLines = $isPermitOverrideFinancialTypeForMultipleLines;
+  }
 
   /**
    * Number of line items.
@@ -87,6 +162,20 @@ class CRM_Financial_BAO_Order {
    */
   public function setLineItemCount(int $lineItemCount): void {
     $this->lineItemCount = $lineItemCount;
+  }
+
+  /**
+   * @return int|null
+   */
+  public function getTemplateContributionID(): ?int {
+    return $this->templateContributionID;
+  }
+
+  /**
+   * @param int $templateContributionID
+   */
+  public function setTemplateContributionID(int $templateContributionID): void {
+    $this->templateContributionID = $templateContributionID;
   }
 
   /**
@@ -120,6 +209,82 @@ class CRM_Financial_BAO_Order {
    * @var array
    */
   protected $lineItems = [];
+
+  /**
+   * Array of entities ordered.
+   *
+   * @var array
+   */
+  protected $entityParameters = [];
+
+  /**
+   * Default price sets for component.
+   *
+   * @var array
+   */
+  protected $defaultPriceSets = [];
+
+  /**
+   * Cache of the default price field.
+   *
+   * @var array
+   */
+  protected $defaultPriceField;
+
+  /**
+   * Cache of the default price field value ID.
+   *
+   * @var array
+   */
+  protected $defaultPriceFieldValueID;
+
+  /**
+   * Get parameters for the entities bought as part of this order.
+   *
+   * @return array
+   *
+   * @internal core tested code only.
+   *
+   */
+  public function getEntitiesToCreate(): array {
+    $entities = [];
+    foreach ($this->entityParameters as $entityToCreate) {
+      if (in_array($entityToCreate['entity'], ['participant', 'membership'], TRUE)) {
+        $entities[] = $entityToCreate;
+      }
+    }
+    return $entities;
+  }
+
+  /**
+   * Set parameters for the entities bought as part of this order.
+   *
+   * @param array $entityParameters
+   * @param int|string $key indexing reference
+   *
+   * @internal core tested code only.
+   *
+   */
+  public function setEntityParameters(array $entityParameters, $key): void {
+    $this->entityParameters[$key] = $entityParameters;
+  }
+
+  /**
+   * Add a line item to an entity.
+   *
+   * The v3 api supports more than on line item being stored against a given
+   * set of entity parameters. There is some doubt as to whether this is a
+   * good thing that should be supported in v4 or something that 'seemed
+   * like a good idea at the time' - but this allows the lines to be added from the
+   * v3 api.
+   *
+   * @param string $lineIndex
+   * @param string $entityKey
+   */
+  public function addLineItemToEntityParameters(string $lineIndex, string $entityKey): void {
+    $this->entityParameters[$entityKey]['entity'] = $this->getLineItemEntity($lineIndex);
+    $this->entityParameters[$entityKey]['line_references'][] = $lineIndex;
+  }
 
   /**
    * Metadata for price fields.
@@ -210,6 +375,29 @@ class CRM_Financial_BAO_Order {
   }
 
   /**
+   * Is the line item financial type to be overridden.
+   *
+   * We have a tested scenario for repeatcontribution where the line item
+   * does not match the top level financial type for the order. In this case
+   * any financial type override has been determined to NOT apply to the line items.
+   *
+   * This is locked in via testRepeatTransactionUpdatedFinancialTypeAndNotEquals.
+   *
+   * @param int $financialTypeID
+   *
+   * @return bool
+   */
+  public function isOverrideLineItemFinancialType(int $financialTypeID) {
+    if (!$this->getOverrideFinancialTypeID()) {
+      return FALSE;
+    }
+    if (!$this->getOverridableFinancialTypeID()) {
+      return TRUE;
+    }
+    return $this->getOverridableFinancialTypeID() === $financialTypeID;
+  }
+
+  /**
    * Set override for total amount.
    *
    * @internal use in tested core code only.
@@ -228,7 +416,11 @@ class CRM_Financial_BAO_Order {
    * @return int| FALSE
    */
   public function getOverrideFinancialTypeID() {
-    if (count($this->getPriceOptions()) !== 1) {
+    // We don't permit overrides if there is more than one line.
+    // The reason for this constraint may be more historical since
+    // the case could be made that if it is set it should be used and
+    // we have built out the tax calculations a lot now.
+    if (!$this->isPermitOverrideFinancialTypeForMultipleLines() && $this->getLineItemCount() > 1) {
       return FALSE;
     }
     return $this->overrideFinancialTypeID ?? FALSE;
@@ -239,9 +431,9 @@ class CRM_Financial_BAO_Order {
    *
    * @internal use in tested core code only.
    *
-   * @param int $overrideFinancialTypeID
+   * @param int|null $overrideFinancialTypeID
    */
-  public function setOverrideFinancialTypeID(int $overrideFinancialTypeID): void {
+  public function setOverrideFinancialTypeID(?int $overrideFinancialTypeID): void {
     $this->overrideFinancialTypeID = $overrideFinancialTypeID;
   }
 
@@ -283,21 +475,7 @@ class CRM_Financial_BAO_Order {
    * @internal use in tested core code only.
    */
   public function setPriceSetToDefault(string $component): void {
-    $this->priceSetID = PriceSet::get(FALSE)
-      ->addWhere('name', '=', ($component === 'membership' ? 'default_membership_type_amount' : 'default_contribution_amount'))
-      ->execute()
-      ->first()['id'];
-  }
-
-  /**
-   * Is overriding the total amount valid for this price set.
-   *
-   * @internal tested. core code use only.
-   *
-   * @return bool
-   */
-  public function supportsOverrideAmount(): bool {
-    return (bool) $this->getPriceSetMetadata()['is_quick_config'];
+    $this->priceSetID = $this->getDefaultPriceSetForComponent($component);
   }
 
   /**
@@ -307,7 +485,6 @@ class CRM_Financial_BAO_Order {
    *
    * @param int $contributionPageID
    *
-   * @throws \CiviCRM_API3_Exception
    */
   public function setPriceSetIDByContributionPageID(int $contributionPageID): void {
     $this->setPriceSetIDByEntity('contribution_page', $contributionPageID);
@@ -472,7 +649,7 @@ class CRM_Financial_BAO_Order {
     }
     if (empty($this->priceSelection) && isset($input['total_amount'])
       && is_numeric($input['total_amount']) && !empty($input['financial_type_id'])) {
-      $this->priceSelection['price_' . $this->getDefaultPriceField()] = $input['total_amount'];
+      $this->priceSelection['price_' . $this->getDefaultPriceFieldID()] = $input['total_amount'];
       $this->setOverrideFinancialTypeID($input['financial_type_id']);
     }
   }
@@ -481,12 +658,34 @@ class CRM_Financial_BAO_Order {
    * Get the id of the price field to use when just an amount is provided.
    *
    * @throws \API_Exception
+   *
+   * @return int
    */
-  public function getDefaultPriceField() {
-    return PriceField::get(FALSE)
-      ->addWhere('name', '=', 'contribution_amount')
-      ->addWhere('price_set_id.name', '=', 'default_contribution_amount')
-      ->execute()->first()['id'];
+  public function getDefaultPriceFieldID():int {
+    if (!$this->defaultPriceField) {
+      $this->defaultPriceField = PriceField::get(FALSE)
+        ->addWhere('name', '=', 'contribution_amount')
+        ->addWhere('price_set_id.name', '=', 'default_contribution_amount')
+        ->execute()->first();
+    }
+    return $this->defaultPriceField['id'];
+  }
+
+  /**
+   * Get the id of the price field to use when just an amount is provided.
+   *
+   * @throws \API_Exception
+   *
+   * @return int
+   */
+  public function getDefaultPriceFieldValueID():int {
+    if (!$this->defaultPriceFieldValueID) {
+      $this->defaultPriceFieldValueID = PriceFieldValue::get(FALSE)
+        ->addWhere('name', '=', 'contribution_amount')
+        ->addWhere('price_field_id.name', '=', 'contribution_amount')
+        ->execute()->first()['id'];
+    }
+    return $this->defaultPriceFieldValueID;
   }
 
   /**
@@ -574,7 +773,8 @@ class CRM_Financial_BAO_Order {
 
   /**
    * @return array
-   * @throws \CiviCRM_API3_Exception
+   *
+   * @throws \API_Exception
    */
   protected function calculateLineItems(): array {
     $lineItems = [];
@@ -588,13 +788,18 @@ class CRM_Financial_BAO_Order {
 
     // Dummy value to prevent e-notice in getLine. We calculate tax in this class.
     $params['financial_type_id'] = 0;
-    foreach ($this->getPriceOptions() as $fieldID => $valueID) {
-      $this->setPriceSetIDFromSelectedField($fieldID);
-      $throwAwayArray = [];
-      // @todo - still using getLine for now but better to bring it to this class & do a better job.
-      $newLines = CRM_Price_BAO_PriceSet::getLine($params, $throwAwayArray, $this->getPriceSetID(), $this->getPriceFieldSpec($fieldID), $fieldID)[1];
-      foreach ($newLines as $newLine) {
-        $lineItems[$newLine['price_field_value_id']] = $newLine;
+    if ($this->getTemplateContributionID()) {
+      $lineItems = $this->getLinesFromTemplateContribution();
+    }
+    else {
+      foreach ($this->getPriceOptions() as $fieldID => $valueID) {
+        $this->setPriceSetIDFromSelectedField($fieldID);
+        $throwAwayArray = [];
+        // @todo - still using getLine for now but better to bring it to this class & do a better job.
+        $newLines = CRM_Price_BAO_PriceSet::getLine($params, $throwAwayArray, $this->getPriceSetID(), $this->getPriceFieldSpec($fieldID), $fieldID)[1];
+        foreach ($newLines as $newLine) {
+          $lineItems[$newLine['price_field_value_id']] = $newLine;
+        }
       }
     }
     // Set the line item count here because it is needed to determine whether
@@ -603,9 +808,13 @@ class CRM_Financial_BAO_Order {
     $this->setLineItemCount(count($lineItems));
 
     foreach ($lineItems as &$lineItem) {
+      // Set the price set id if not set above. Note that the above
+      // requires it for line retrieval but we want to fix that as it
+      // should not be required at that point.
+      $this->setPriceSetIDFromSelectedField($lineItem['price_field_id']);
       // Set any pre-calculation to zero as we will calculate.
       $lineItem['tax_amount'] = 0;
-      if ($this->getOverrideFinancialTypeID() !== FALSE) {
+      if ($this->isOverrideLineItemFinancialType($lineItem['financial_type_id']) !== FALSE) {
         $lineItem['financial_type_id'] = $this->getOverrideFinancialTypeID();
       }
       $taxRate = $this->getTaxRate((int) $lineItem['financial_type_id']);
@@ -740,6 +949,9 @@ class CRM_Financial_BAO_Order {
         $lineItem = $this->fillMembershipLine($lineItem);
       }
     }
+    if ($this->getPriceSetID() === $this->getDefaultPriceSetForComponent('contribution')) {
+      $this->fillDefaultContributionLine($lineItem);
+    }
     $this->lineItems[$index] = $lineItem;
   }
 
@@ -827,6 +1039,87 @@ class CRM_Financial_BAO_Order {
     else {
       $lineItem['line_total'] = $lineItem['unit_price'] = $this->getOverrideTotalAmount();
     }
+  }
+
+  /**
+   * Get the line items from a template.
+   *
+   * @return \Civi\Api4\Generic\Result
+   *
+   * @throws \API_Exception
+   */
+  protected function getLinesFromTemplateContribution(): array {
+    $lines = $this->getLinesForContribution();
+    foreach ($lines as &$line) {
+      // The apiv4 insists on adding id - so let it get all the details
+      // and we will filter out those that are not part of a template here.
+      unset($line['id'], $line['contribution_id']);
+    }
+    return $lines;
+  }
+
+  /**
+   * @return array
+   * @throws \API_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
+   */
+  protected function getLinesForContribution(): array {
+    return (array) LineItem::get(FALSE)
+      ->addWhere('contribution_id', '=', $this->getTemplateContributionID())
+      ->setSelect([
+        'contribution_id',
+        'entity_id',
+        'entity_table',
+        'price_field_id',
+        'price_field_value_id',
+        'financial_type_id',
+        'label',
+        'qty',
+        'unit_price',
+        'line_total',
+        'tax_amount',
+        'non_deductible_amount',
+        'participant_count',
+        'membership_num_terms',
+      ])
+      ->execute();
+  }
+
+  /**
+   * Get the default price set id for the given component.
+   *
+   * @param string $component
+   *
+   * @return int
+   * @throws \API_Exception
+   */
+  protected function getDefaultPriceSetForComponent(string $component): int {
+    if (!isset($this->defaultPriceSets[$component])) {
+      $this->defaultPriceSets[$component] = PriceSet::get(FALSE)
+        ->addWhere('name', '=', ($component === 'membership' ? 'default_membership_type_amount' : 'default_contribution_amount'))
+        ->execute()
+        ->first()['id'];
+    }
+    return $this->defaultPriceSets[$component];
+  }
+
+  /**
+   * Fill in values for a default contribution line item.
+   *
+   * @param array $lineItem
+   *
+   * @throws \API_Exception
+   */
+  protected function fillDefaultContributionLine(array &$lineItem): void {
+    $defaults = [
+      'qty' => 1,
+      'price_field_id' => $this->getDefaultPriceFieldID(),
+      'price_field_value_id' => $this->getDefaultPriceFieldValueID(),
+      'entity_table' => 'civicrm_contribution',
+      'unit_price' => $lineItem['line_total'],
+      'label' => ts('Contribution Amount'),
+    ];
+    $lineItem = array_merge($defaults, $lineItem);
   }
 
 }

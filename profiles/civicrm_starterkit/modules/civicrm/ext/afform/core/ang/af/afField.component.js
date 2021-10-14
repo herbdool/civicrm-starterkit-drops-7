@@ -12,7 +12,7 @@
       fieldName: '@name',
       defn: '='
     },
-    controller: function($scope, $element, crmApi4) {
+    controller: function($scope, $element, crmApi4, $timeout) {
       var ts = $scope.ts = CRM.ts('org.civicrm.afform'),
         ctrl = this,
         boolOptions = [{id: true, label: ts('Yes')}, {id: false, label: ts('No')}],
@@ -86,6 +86,35 @@
           });
         }
 
+        // Set default value
+        if (ctrl.defn.afform_default) {
+          // Wait for parent controllers to initialize
+          $timeout(function() {
+            $scope.dataProvider.getFieldData()[ctrl.fieldName] = ctrl.defn.afform_default;
+          });
+        }
+
+      };
+
+      // Get the repeat index of the entity fieldset (not the join)
+      ctrl.getEntityIndex = function() {
+        // If already in a join repeat, look up the outer repeat
+        if ('repeatIndex' in $scope.dataProvider && $scope.dataProvider.afRepeat.getRepeatType() === 'join') {
+          return $scope.dataProvider.outerRepeatItem ? $scope.dataProvider.outerRepeatItem.repeatIndex : 0;
+        } else {
+          return ctrl.afRepeatItem ? ctrl.afRepeatItem.repeatIndex : 0;
+        }
+      };
+
+      // Params for the Afform.submitFile API when uploading a file field
+      ctrl.getFileUploadParams = function() {
+        return {
+          entityName: ctrl.afFieldset.modelName,
+          fieldName: ctrl.fieldName,
+          joinEntity: ctrl.afJoin ? ctrl.afJoin.entity : null,
+          entityIndex: ctrl.getEntityIndex(),
+          joinIndex: ctrl.afJoin && $scope.dataProvider.repeatIndex || null
+        };
       };
 
       $scope.getOptions = function () {

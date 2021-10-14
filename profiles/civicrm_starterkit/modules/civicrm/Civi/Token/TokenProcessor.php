@@ -49,12 +49,15 @@ class TokenProcessor {
    *
    *   - controller: string, the class which is managing the mail-merge.
    *   - smarty: bool, whether to enable smarty support.
+   *   - smartyTokenAlias: array, Define Smarty variables that are populated
+   *      based on token-content. Ex: ['theInvoiceId' => 'contribution.invoice_id']
    *   - contactId: int, the main person/org discussed in the message.
    *   - contact: array, the main person/org discussed in the message.
    *     (Optional for performance tweaking; if omitted, will load
    *     automatically from contactId.)
    *   - actionSchedule: DAO, the rule which triggered the mailing
    *     [for CRM_Core_BAO_ActionScheduler].
+   *   - locale: string, the name of a locale (eg 'fr_CA') to use for {ts} strings in the view.
    *   - schema: array, a list of fields that will be provided for each row.
    *     This is automatically populated with any general context
    *     keys, but you may need to add extra keys for token-row data.
@@ -255,7 +258,7 @@ class TokenProcessor {
    *   Each row is presented with a fluent, OOP facade.
    */
   public function getRows() {
-    return new TokenRowIterator($this, new \ArrayIterator($this->rowContexts));
+    return new TokenRowIterator($this, new \ArrayIterator($this->rowContexts ?: []));
   }
 
   /**
@@ -350,6 +353,8 @@ class TokenProcessor {
     if (!is_object($row)) {
       $row = $this->getRow($row);
     }
+
+    $swapLocale = empty($row->context['locale']) ? NULL : \CRM_Utils_AutoClean::swapLocale($row->context['locale']);
 
     $message = $this->getMessage($name);
     $row->fill($message['format']);

@@ -30,8 +30,6 @@ trait CRM_Contact_Form_Task_EmailTrait {
    */
   public $_single = FALSE;
 
-  public $_noEmails = FALSE;
-
   /**
    * All the existing templates in the system.
    *
@@ -56,19 +54,6 @@ trait CRM_Contact_Form_Task_EmailTrait {
    * @var array
    */
   public $_toContactIds = [];
-
-  /**
-   * Store only "cc" contact ids.
-   * @var array
-   */
-  public $_ccContactIds = [];
-
-  /**
-   * Store only "bcc" contact ids.
-   *
-   * @var array
-   */
-  public $_bccContactIds = [];
 
   /**
    * Is the form being loaded from a search action.
@@ -120,13 +105,14 @@ trait CRM_Contact_Form_Task_EmailTrait {
    * Call trait preProcess function.
    *
    * This function exists as a transitional arrangement so classes overriding
-   * preProcess can still call it. Ideally it will be melded into preProcess later.
+   * preProcess can still call it. Ideally it will be melded into preProcess
+   * later.
    *
-   * @throws \CiviCRM_API3_Exception
    * @throws \CRM_Core_Exception
+   * @throws \API_Exception
    */
   protected function traitPreProcess() {
-    CRM_Contact_Form_Task_EmailCommon::preProcessFromAddress($this);
+    $this->preProcessFromAddress();
     if ($this->isSearchContext()) {
       // Currently only the contact email form is callable outside search context.
       parent::preProcess();
@@ -136,6 +122,40 @@ trait CRM_Contact_Form_Task_EmailTrait {
     if (CRM_Core_Permission::check('administer CiviCRM')) {
       $this->assign('isAdmin', 1);
     }
+  }
+
+  /**
+   * Pre Process Form Addresses to be used in Quickform
+   *
+   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
+   */
+  protected function preProcessFromAddress(): void {
+    $form = $this;
+    $form->_emails = [];
+
+    // @TODO remove these line and to it somewhere more appropriate. Currently some classes (e.g Case
+    // are having to re-write contactIds afterwards due to this inappropriate variable setting
+    // If we don't have any contact IDs, use the logged in contact ID
+    $form->_contactIds = $form->_contactIds ?: [CRM_Core_Session::getLoggedInContactID()];
+
+    $fromEmailValues = CRM_Core_BAO_Email::getFromEmail();
+
+    if (empty($fromEmailValues)) {
+      CRM_Core_Error::statusBounce(ts('Your user record does not have a valid email address and no from addresses have been configured.'));
+    }
+
+    $form->_emails = $fromEmailValues;
+    $defaults = [];
+    $form->_fromEmails = $fromEmailValues;
+    if (is_numeric(key($form->_fromEmails))) {
+      $emailID = (int) key($form->_fromEmails);
+      $defaults = CRM_Core_BAO_Email::getEmailSignatureDefaults($emailID);
+    }
+    if (!Civi::settings()->get('allow_mail_from_logged_in_contact')) {
+      $defaults['from_email_address'] = current(CRM_Core_BAO_Domain::getNameAndEmail(FALSE, TRUE));
+    }
+    $form->setDefaults($defaults);
   }
 
   /**
@@ -258,12 +278,12 @@ trait CRM_Contact_Form_Task_EmailTrait {
 
     if ($this->_single) {
       // also fix the user context stack
-      if ($this->_caseId) {
+      if ($this->getCaseID()) {
         $ccid = CRM_Core_DAO::getFieldValue('CRM_Case_DAO_CaseContact', $this->_caseId,
           'contact_id', 'case_id'
         );
         $url = CRM_Utils_System::url('civicrm/contact/view/case',
-          "&reset=1&action=view&cid={$ccid}&id={$this->_caseId}"
+          "&reset=1&action=view&cid={$ccid}&id=" . $this->getCaseID()
         );
       }
       elseif ($this->_context) {
@@ -331,7 +351,7 @@ trait CRM_Contact_Form_Task_EmailTrait {
     //Added for CRM-15984: Add campaign field
     CRM_Campaign_BAO_Campaign::addCampaign($this);
 
-    $this->addFormRule(['CRM_Contact_Form_Task_EmailCommon', 'formRule'], $this);
+    $this->addFormRule([__CLASS__, 'saveTemplateFormRule'], $this);
     CRM_Core_Resources::singleton()->addScriptFile('civicrm', 'templates/CRM/Contact/Form/Task/EmailCommon.js', 0, 'html-header');
   }
 
@@ -413,7 +433,7 @@ trait CRM_Contact_Form_Task_EmailTrait {
     }
 
     // send the mail
-    list($sent, $activityIds) = CRM_Activity_BAO_Activity::sendEmail(
+    [$sent, $activityIds] = CRM_Activity_BAO_Activity::sendEmail(
       $formattedContactDetails,
       $this->getSubject($formValues['subject']),
       $formValues['text_message'],
@@ -426,9 +446,9 @@ trait CRM_Contact_Form_Task_EmailTrait {
       $bcc,
       array_keys($this->_toContactDetails),
       $additionalDetails,
-      $this->getVar('_contributionIds') ?? [],
+      $this->getContributionIDs(),
       CRM_Utils_Array::value('campaign_id', $formValues),
-      $this->getVar('_caseId')
+      $this->getCaseID()
     );
 
     if ($sent) {
@@ -592,11 +612,12 @@ trait CRM_Contact_Form_Task_EmailTrait {
    * @param string $subject
    *
    * @return string
+   * @throws \CRM_Core_Exception
    */
   protected function getSubject(string $subject):string {
     // CRM-5916: prepend case id hash to CiviCase-originating emails’ subjects
-    if (isset($this->_caseId) && is_numeric($this->_caseId)) {
-      $hash = substr(sha1(CIVICRM_SITE_KEY . $this->_caseId), 0, 7);
+    if ($this->getCaseID()) {
+      $hash = substr(sha1(CIVICRM_SITE_KEY . $this->getCaseID()), 0, 7);
       $subject = "[case #$hash] $subject";
     }
     return $subject;
@@ -642,6 +663,48 @@ trait CRM_Contact_Form_Task_EmailTrait {
       }
     }
     return $followupStatus;
+  }
+
+  /**
+   * Form rule.
+   *
+   * @param array $fields
+   *   The input form values.
+   *
+   * @return bool|array
+   *   true if no errors, else array of errors
+   */
+  public static function saveTemplateFormRule(array $fields) {
+    $errors = [];
+    //Added for CRM-1393
+    if (!empty($fields['saveTemplate']) && empty($fields['saveTemplateName'])) {
+      $errors['saveTemplateName'] = ts('Enter name to save message template');
+    }
+    return empty($errors) ? TRUE : $errors;
+  }
+
+  /**
+   * Get selected contribution IDs.
+   *
+   * @return array
+   */
+  protected function getContributionIDs(): array {
+    return [];
+  }
+
+  /**
+   * Get case ID - if any.
+   *
+   * @return int|null
+   *
+   * @throws \CRM_Core_Exception
+   */
+  protected function getCaseID(): ?int {
+    $caseID = CRM_Utils_Request::retrieve('caseid', 'String', $this);
+    if ($caseID) {
+      return (int) $caseID;
+    }
+    return NULL;
   }
 
 }

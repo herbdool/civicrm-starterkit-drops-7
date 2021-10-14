@@ -1971,11 +1971,12 @@ LIKE %1
    *
    * @param int $entityID
    * @param int $newEntityID
+   * @param string $parentOperation
    */
-  public function copyCustomFields($entityID, $newEntityID) {
+  public function copyCustomFields($entityID, $newEntityID, $parentOperation = NULL) {
     $entity = CRM_Core_DAO_AllCoreTables::getBriefName(get_class($this));
     $tableName = CRM_Core_DAO_AllCoreTables::getTableForClass(get_class($this));
-    // Obtain custom values for old event
+    // Obtain custom values for the old entity.
     $customParams = $htmlType = [];
     $customValues = CRM_Core_BAO_CustomValueTable::getEntityValues($entityID, $entity);
 
@@ -2009,8 +2010,8 @@ LIKE %1
         }
       }
 
-      // Save Custom Fields for new Event
-      CRM_Core_BAO_CustomValueTable::postProcess($customParams, $tableName, $newEntityID, $entity);
+      // Save Custom Fields for new Entity.
+      CRM_Core_BAO_CustomValueTable::postProcess($customParams, $tableName, $newEntityID, $entity, $parentOperation ?? 'create');
     }
 
     // copy activity attachments ( if any )
@@ -2881,20 +2882,9 @@ SELECT contact_id
    */
   public static function createSQLFilter($fieldName, $filter, $type = NULL, $alias = NULL, $returnSanitisedArray = FALSE) {
     foreach ($filter as $operator => $criteria) {
-      if (!CRM_Core_BAO_SchemaHandler::databaseSupportsUTF8MB4()) {
-        foreach ((array) $criteria as $criterion) {
-          if (!empty($criterion) && !is_numeric($criterion)
-            // The first 2 criteria are redundant but are added as they
-            // seem like they would
-            // be quicker than this 3rd check.
-            && max(array_map('ord', str_split($criterion))) >= 240) {
-            // String contains unsupported emojis.
-            // We return a clause that resolves to false as an emoji string by definition cannot be saved.
-            // note that if we return just 0 for false if gets lost in empty checks.
-            // https://stackoverflow.com/questions/16496554/can-php-detect-4-byte-encoded-utf8-chars
-            return '0 = 1';
-          }
-        }
+      $emojiFilter = CRM_Utils_SQL::handleEmojiInQuery($criteria);
+      if ($emojiFilter === '0 = 1') {
+        return $emojiFilter;
       }
 
       if (in_array($operator, self::acceptedSQLOperators(), TRUE)) {

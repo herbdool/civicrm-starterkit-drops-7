@@ -278,6 +278,10 @@ class CRM_Contribute_Form_Contribution extends CRM_Contribute_Form_AbstractEditP
       $this->applyCustomData('Contribution', $this->getFinancialTypeID(), $this->_id);
     }
 
+    if (!empty($this->_values['is_template'])) {
+      $this->assign('is_template', TRUE);
+    }
+
     $this->_lineItems = [];
     if ($this->_id) {
       if (!empty($this->_compId) && $this->_compContext === 'participant') {
@@ -298,6 +302,9 @@ class CRM_Contribute_Form_Contribution extends CRM_Contribute_Form_AbstractEditP
       $this->_payNow = TRUE;
       $this->assign('payNow', $this->_payNow);
       CRM_Utils_System::setTitle(ts('Pay with Credit Card'));
+    }
+    elseif (!empty($this->_values['is_template'])) {
+      $this->setPageTitle(ts('Template Contribution'));
     }
     elseif ($this->_mode) {
       $this->setPageTitle($this->_ppID ? ts('Credit Card Pledge Payment') : ts('Credit Card Contribution'));
@@ -1159,6 +1166,7 @@ class CRM_Contribute_Form_Contribution extends CRM_Contribute_Form_AbstractEditP
           }
           catch (CiviCRM_API3_Exception $e) {
             if ($e->getErrorCode() != 'contribution_completed') {
+              \Civi::log()->error('CRM_Contribute_Form_Contribution::processCreditCard CiviCRM_API3_Exception: ' . $e->getMessage());
               throw new CRM_Core_Exception('Failed to update contribution in database');
             }
           }
@@ -1668,9 +1676,7 @@ class CRM_Contribute_Form_Contribution extends CRM_Contribute_Form_AbstractEditP
    * @param array $lineItem
    */
   protected function invoicingPostProcessHook($submittedValues, $action, $lineItem) {
-
-    $invoiceSettings = Civi::settings()->get('contribution_invoice_settings');
-    if (empty($invoiceSettings['invoicing'])) {
+    if (!Civi::settings()->get('invoicing')) {
       return;
     }
     $taxRate = [];

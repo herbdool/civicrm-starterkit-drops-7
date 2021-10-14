@@ -13,6 +13,7 @@ use Civi\API\Request;
 use Civi\Api4\Group;
 use Civi\Api4\Query\Api4SelectQuery;
 use Civi\Api4\Query\SqlExpression;
+use Civi\Api4\SavedSearch;
 
 /**
  *
@@ -508,23 +509,29 @@ ORDER BY   gc.contact_id, g.children
    * @param int $groupID - Group to invalidate
    */
   public static function invalidateGroupContactCache($groupID): void {
-    CRM_Core_DAO::executeQuery("UPDATE civicrm_group
+    CRM_Core_DAO::executeQuery('UPDATE civicrm_group
       SET cache_date = NULL
-      WHERE id = %1 AND (saved_search_id IS NOT NULL OR children IS NOT NULL)", [
+      WHERE id = %1 AND (saved_search_id IS NOT NULL OR children IS NOT NULL)', [
         1 => [$groupID, 'Positive'],
       ]);
   }
 
   /**
    * @param array $savedSearch
-   * @param string $addSelect
-   * @param string $excludeClause
+   * @param int $groupID
+   *
    * @return string
    * @throws API_Exception
    * @throws \Civi\API\Exception\NotImplementedException
    * @throws CRM_Core_Exception
    */
-  protected static function getApiSQL(array $savedSearch, string $addSelect, string $excludeClause) {
+  protected static function getApiSQL(array $savedSearch, int $groupID): string {
+    $excludeClause = "NOT IN (
+                        SELECT contact_id FROM civicrm_group_contact
+                        WHERE civicrm_group_contact.status = 'Removed'
+                        AND civicrm_group_contact.group_id = $groupID )";
+    $addSelect = "$groupID AS group_id";
+
     $apiParams = $savedSearch['api_params'] + ['select' => ['id'], 'checkPermissions' => FALSE];
     $idField = SqlExpression::convert($apiParams['select'][0], TRUE)->getAlias();
     // Unless there's a HAVING clause, we don't care about other columns
@@ -551,15 +558,25 @@ ORDER BY   gc.contact_id, g.children
    * We split it up and store custom class
    * so temp tables are not destroyed if they are used
    *
-   * @param int $savedSearchID
-   * @param array $ssParams
-   * @param string $addSelect
-   * @param string $excludeClause
+   * @param array $savedSearch
+   * @param int $groupID
    *
    * @return string
-   * @throws CRM_Core_Exception
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
-  protected static function getCustomSearchSQL($savedSearchID, array $ssParams, string $addSelect, string $excludeClause) {
+  protected static function getCustomSearchSQL(array $savedSearch, int $groupID) {
+    $savedSearchID = $savedSearch['id'];
+    $excludeClause = "NOT IN (
+                        SELECT contact_id FROM civicrm_group_contact
+                        WHERE civicrm_group_contact.status = 'Removed'
+                        AND civicrm_group_contact.group_id = $groupID )";
+    $addSelect = "$groupID AS group_id";
+    $ssParams = CRM_Contact_BAO_SavedSearch::getFormValues($savedSearchID);
+    // CRM-7021 rectify params to what proximity search expects if there is a value for prox_distance
+    if (!empty($ssParams)) {
+      CRM_Contact_BAO_ProximityQuery::fixInputParams($ssParams);
+    }
     $searchSQL = CRM_Contact_BAO_SearchCustom::customClass($ssParams['customSearchID'], $savedSearchID)->contactIDs();
     $searchSQL = str_replace('ORDER BY contact_a.id ASC', '', $searchSQL);
     if (strpos($searchSQL, 'WHERE') === FALSE) {
@@ -574,16 +591,33 @@ ORDER BY   gc.contact_id, g.children
   /**
    * Get array of sql from a saved query object group.
    *
-   * @param int $savedSearchID
-   * @param array $ssParams
-   * @param string $addSelect
-   * @param string $excludeClause
+   * @param array $savedSearch
+   * @param int $groupID
    *
    * @return string
    * @throws \CRM_Core_Exception
    * @throws \CiviCRM_API3_Exception
    */
-  protected static function getQueryObjectSQL($savedSearchID, array $ssParams, string $addSelect, string $excludeClause) {
+  protected static function getQueryObjectSQL(array $savedSearch, int $groupID): string {
+    $savedSearchID = $savedSearch['id'];
+    $excludeClause = "NOT IN (
+                        SELECT contact_id FROM civicrm_group_contact
+                        WHERE civicrm_group_contact.status = 'Removed'
+                        AND civicrm_group_contact.group_id = $groupID )";
+    $addSelect = "$groupID AS group_id";
+    $fv = CRM_Contact_BAO_SavedSearch::getFormValues($savedSearchID);
+    //check if the saved search has mapping id
+    if ($savedSearch['mapping_id']) {
+      $ssParams = CRM_Core_BAO_Mapping::formattedFields($fv);
+    }
+    else {
+      $ssParams = CRM_Contact_BAO_Query::convertFormValues($fv);
+    }
+    // CRM-7021 rectify params to what proximity search expects if there is a value for prox_distance
+    if (!empty($ssParams)) {
+      CRM_Contact_BAO_ProximityQuery::fixInputParams($ssParams);
+    }
+
     $returnProperties = NULL;
     if (CRM_Core_DAO::getFieldValue('CRM_Contact_DAO_SavedSearch', $savedSearchID, 'mapping_id')) {
       $fv = CRM_Contact_BAO_SavedSearch::getFormValues($savedSearchID);
@@ -792,28 +826,20 @@ ORDER BY   gc.contact_id, g.children
    */
   protected static function insertGroupContactsIntoTempTable(string $tempTableName, int $groupID, ?int $savedSearchID, ?string $children): void {
     if ($savedSearchID) {
-      $ssParams = CRM_Contact_BAO_SavedSearch::getSearchParams($savedSearchID);
+      $savedSearch = SavedSearch::get(FALSE)
+        ->addWhere('id', '=', $savedSearchID)
+        ->addSelect('*')
+        ->execute()
+        ->first();
 
-      $excludeClause = "NOT IN (
-                        SELECT contact_id FROM civicrm_group_contact
-                        WHERE civicrm_group_contact.status = 'Removed'
-                        AND civicrm_group_contact.group_id = $groupID )";
-      $addSelect = "$groupID AS group_id";
-
-      if (!empty($ssParams['api_entity'])) {
-        $sql = self::getApiSQL($ssParams, $addSelect, $excludeClause);
+      if ($savedSearch['api_entity']) {
+        $sql = self::getApiSQL($savedSearch, $groupID);
+      }
+      elseif (!empty($savedSearch['search_custom_id'])) {
+        $sql = self::getCustomSearchSQL($savedSearch, $groupID);
       }
       else {
-        // CRM-7021 rectify params to what proximity search expects if there is a value for prox_distance
-        if (!empty($ssParams)) {
-          CRM_Contact_BAO_ProximityQuery::fixInputParams($ssParams);
-        }
-        if (isset($ssParams['customSearchID'])) {
-          $sql = self::getCustomSearchSQL($savedSearchID, $ssParams, $addSelect, $excludeClause);
-        }
-        else {
-          $sql = self::getQueryObjectSQL($savedSearchID, $ssParams, $addSelect, $excludeClause);
-        }
+        $sql = self::getQueryObjectSQL($savedSearch, $groupID);
       }
     }
 

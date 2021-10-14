@@ -149,7 +149,12 @@ class CRM_Case_Form_CaseView extends CRM_Core_Form {
       NULL,
       $this->_caseID,
       NULL,
-      $entitySubType
+      $entitySubType,
+      NULL,
+      TRUE,
+      NULL,
+      FALSE,
+      CRM_Core_Permission::VIEW
     );
     CRM_Core_BAO_CustomGroup::buildCustomDataView($this, $groupTree, FALSE, NULL, NULL, NULL, $this->_caseID);
   }
@@ -348,9 +353,7 @@ class CRM_Case_Form_CaseView extends CRM_Core_Form {
     );
 
     $hookCaseSummary = CRM_Utils_Hook::caseSummary($this->_caseID);
-    if (is_array($hookCaseSummary)) {
-      $this->assign('hookCaseSummary', $hookCaseSummary);
-    }
+    $this->assign('hookCaseSummary', is_array($hookCaseSummary) ? $hookCaseSummary : NULL);
 
     $allTags = CRM_Core_BAO_Tag::getColorTags('civicrm_case');
 

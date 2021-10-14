@@ -9,8 +9,6 @@
  +--------------------------------------------------------------------+
  */
 
-use Civi\Token\TokenProcessor;
-
 /**
  *
  * @package CRM
@@ -18,6 +16,7 @@ use Civi\Token\TokenProcessor;
  */
 
 use Civi\Api4\MessageTemplate;
+use Civi\WorkflowMessage\WorkflowMessage;
 
 require_once 'Mail/mime.php';
 
@@ -367,6 +366,37 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
   }
 
   /**
+   * Render a message template.
+   *
+   * This method is very similar to `sendTemplate()` - accepting most of the same arguments
+   * and emitting similar hooks. However, it specifically precludes the possibility of
+   * sending a message. It only renders.
+   *
+   * @param $params
+   *  Mixed render parameters. See sendTemplate() for more details.
+   * @return array
+   *   Rendered message, consistent of 'subject', 'text', 'html'
+   *   Ex: ['subject' => 'Hello Bob', 'text' => 'It\'s been so long since we sent you an automated notification!']
+   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
+   * @see sendTemplate()
+   */
+  public static function renderTemplate($params) {
+    $forbidden = ['from', 'toName', 'toEmail', 'cc', 'bcc', 'replyTo'];
+    $intersect = array_intersect($forbidden, array_keys($params));
+    if (!empty($intersect)) {
+      throw new \CRM_Core_Exception(sprintf("renderTemplate() received forbidden fields (%s)",
+        implode(',', $intersect)));
+    }
+
+    $mailContent = [];
+    // sendTemplate has had an obscure feature - if you omit `toEmail`, then it merely renders.
+    // At some point, we may want to invert the relation between renderTemplate/sendTemplate, but for now this is a smaller patch.
+    [$sent, $mailContent['subject'], $mailContent['text'], $mailContent['html']] = static::sendTemplate($params);
+    return $mailContent;
+  }
+
+  /**
    * Send an email from the specified template based on an array of params.
    *
    * @param array $params
@@ -378,15 +408,34 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
    * @throws \API_Exception
    */
   public static function sendTemplate($params) {
-    $defaults = [
-      // option value name of the template
+    $modelDefaults = [
+      // instance of WorkflowMessageInterface, containing a list of data to provide to the message-template
+      'model' => NULL,
+      // Symbolic name of the workflow step. Matches the option-value-name of the template.
       'valueName' => NULL,
-      // ID of the template
-      'messageTemplateID' => NULL,
-      // contact id if contact tokens are to be replaced
-      'contactId' => NULL,
       // additional template params (other than the ones already set in the template singleton)
       'tplParams' => [],
+      // additional token params (passed to the TokenProcessor)
+      // INTERNAL: 'tokenContext' is currently only intended for use within civicrm-core only. For downstream usage, future updates will provide comparable public APIs.
+      'tokenContext' => [],
+      // properties to import directly to the model object
+      'modelProps' => NULL,
+      // contact id if contact tokens are to be replaced; alias for tokenContext.contactId
+      'contactId' => NULL,
+    ];
+    $viewDefaults = [
+      // ID of the specific template to load
+      'messageTemplateID' => NULL,
+      // content of the message template
+      // Ex: ['msg_subject' => 'Hello {contact.display_name}', 'msg_html' => '...', 'msg_text' => '...']
+      // INTERNAL: 'messageTemplate' is currently only intended for use within civicrm-core only. For downstream usage, future updates will provide comparable public APIs.
+      'messageTemplate' => NULL,
+      // whether this is a test email (and hence should include the test banner)
+      'isTest' => FALSE,
+      // Disable Smarty?
+      'disableSmarty' => FALSE,
+    ];
+    $envelopeDefaults = [
       // the From: header
       'from' => NULL,
       // the recipient’s name
@@ -401,33 +450,36 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
       'replyTo' => NULL,
       // email attachments
       'attachments' => NULL,
-      // whether this is a test email (and hence should include the test banner)
-      'isTest' => FALSE,
       // filename of optional PDF version to add as attachment (do not include path)
       'PDFFilename' => NULL,
-      // Disable Smarty?
-      'disableSmarty' => FALSE,
     ];
-    $params = array_merge($defaults, $params);
 
-    // Core#644 - handle Email ID passed as "From".
-    if (isset($params['from'])) {
-      $params['from'] = CRM_Utils_Mail::formatFromAddress($params['from']);
-    }
+    // Allow WorkflowMessage to run any filters/mappings/cleanups.
+    $model = $params['model'] ?? WorkflowMessage::create($params['valueName'] ?? 'UNKNOWN');
+    $params = WorkflowMessage::exportAll(WorkflowMessage::importAll($model, $params));
+    unset($params['model']);
+    // Subsequent hooks use $params. Retaining the $params['model'] might be nice - but don't do it unless you figure out how to ensure data-consistency (eg $params['tplParams'] <=> $params['model']).
+    // If you want to expose the model via hook, consider interjecting a new Hook::alterWorkflowMessage($model) between `importAll()` and `exportAll()`.
+
+    $params = array_merge($modelDefaults, $viewDefaults, $envelopeDefaults, $params);
 
     CRM_Utils_Hook::alterMailParams($params, 'messageTemplate');
     if (!is_int($params['messageTemplateID']) && !is_null($params['messageTemplateID'])) {
       CRM_Core_Error::deprecatedWarning('message template id should be an integer');
       $params['messageTemplateID'] = (int) $params['messageTemplateID'];
     }
-    $mailContent = self::loadTemplate((string) $params['valueName'], $params['isTest'], $params['messageTemplateID'] ?? NULL, $params['groupName'] ?? '');
+    $mailContent = self::loadTemplate((string) $params['valueName'], $params['isTest'], $params['messageTemplateID'] ?? NULL, $params['groupName'] ?? '', $params['messageTemplate'], $params['subject'] ?? NULL);
 
-    // Overwrite subject from form field
-    if (!empty($params['subject'])) {
-      $mailContent['subject'] = $params['subject'];
+    $params['tokenContext'] = array_merge([
+      'smarty' => (bool) !$params['disableSmarty'],
+      'contactId' => $params['contactId'],
+    ], $params['tokenContext']);
+    $rendered = CRM_Core_TokenSmarty::render(CRM_Utils_Array::subset($mailContent, ['text', 'html', 'subject']), $params['tokenContext'], $params['tplParams']);
+    if (isset($rendered['subject'])) {
+      $rendered['subject'] = trim(preg_replace('/[\r\n]+/', ' ', $rendered['subject']));
     }
-
-    $mailContent = self::renderMessageTemplate($mailContent, (bool) $params['disableSmarty'], $params['contactId'] ?? NULL, $params['tplParams']);
+    $nullSet = ['subject' => NULL, 'text' => NULL, 'html' => NULL];
+    $mailContent = array_merge($nullSet, $mailContent, $rendered);
 
     // send the template, honouring the target user’s preferences (if any)
     $sent = FALSE;
@@ -453,6 +505,7 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
 
       $config = CRM_Core_Config::singleton();
       if (isset($params['isEmailPdf']) && $params['isEmailPdf'] == 1) {
+        // FIXME: $params['contributionId'] is not modeled in the parameter list. When is it supplied? Should probably move to tokenContext.contributionId.
         $pdfHtml = CRM_Contribute_BAO_ContributionPage::addInvoicePdfToEmail($params['contributionId'], $params['contactId']);
         if (empty($params['attachments'])) {
           $params['attachments'] = [];
@@ -504,12 +557,18 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
    * @param bool $isTest
    * @param int|null $messageTemplateID
    * @param string $groupName
+   * @param array|null $messageTemplateOverride
+   *   Optionally, record with msg_subject, msg_text, msg_html.
+   *   If omitted, the record will be loaded from workflowName/messageTemplateID.
+   * @param string|null $subjectOverride
+   *   This option is the older, wonkier version of $messageTemplate['msg_subject']...
    *
    * @return array
    * @throws \API_Exception
    * @throws \CRM_Core_Exception
    */
-  protected static function loadTemplate(string $workflowName, bool $isTest, int $messageTemplateID = NULL, $groupName = NULL): array {
+  protected static function loadTemplate(string $workflowName, bool $isTest, int $messageTemplateID = NULL, $groupName = NULL, ?array $messageTemplateOverride = NULL, ?string $subjectOverride = NULL): array {
+    $base = ['msg_subject' => NULL, 'msg_text' => NULL, 'msg_html' => NULL, 'pdf_format_id' => NULL];
     if (!$workflowName && !$messageTemplateID) {
       throw new CRM_Core_Exception(ts("Message template's option value or ID missing."));
     }
@@ -524,12 +583,12 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
     else {
       $apiCall->addWhere('workflow_name', '=', $workflowName);
     }
-    $messageTemplate = $apiCall->execute()->first();
-    if (empty($messageTemplate['id'])) {
+    $messageTemplate = array_merge($base, $apiCall->execute()->first() ?: [], $messageTemplateOverride ?: []);
+    if (empty($messageTemplate['id']) && empty($messageTemplateOverride)) {
       if ($messageTemplateID) {
         throw new CRM_Core_Exception(ts('No such message template: id=%1.', [1 => $messageTemplateID]));
       }
-      throw new CRM_Core_Exception(ts('No message template with workflow name %2.', [2 => $workflowName]));
+      throw new CRM_Core_Exception(ts('No message template with workflow name %1.', [1 => $workflowName]));
     }
 
     $mailContent = [
@@ -566,37 +625,11 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
       $mailContent['html'] = preg_replace('/<body(.*)$/im', "<body\\1\n{$testText['msg_html']}", $mailContent['html']);
     }
 
-    return $mailContent;
-  }
-
-  /**
-   * Render the message template, resolving tokens and smarty tokens.
-   *
-   * As with all BAO methods this should not be called directly outside
-   * of tested core code and is highly likely to change.
-   *
-   * @param array $mailContent
-   * @param bool $disableSmarty
-   * @param int|NULL $contactID
-   * @param array $smartyAssigns
-   *
-   * @return array
-   */
-  public static function renderMessageTemplate(array $mailContent, bool $disableSmarty, $contactID, array $smartyAssigns): array {
-    CRM_Core_Smarty::singleton()->pushScope($smartyAssigns);
-    $tokenProcessor = new TokenProcessor(\Civi::dispatcher(), ['smarty' => !$disableSmarty]);
-    $tokenProcessor->addMessage('html', $mailContent['html'], 'text/html');
-    $tokenProcessor->addMessage('text', $mailContent['text'], 'text/plain');
-    $tokenProcessor->addMessage('subject', $mailContent['subject'], 'text/plain');
-    $tokenProcessor->addRow($contactID ? ['contactId' => $contactID] : []);
-    $tokenProcessor->evaluate();
-    foreach ($tokenProcessor->getRows() as $row) {
-      $mailContent['html'] = $row->render('html');
-      $mailContent['text'] = $row->render('text');
-      $mailContent['subject'] = $row->render('subject');
+    if (!empty($subjectOverride)) {
+      CRM_Core_Error::deprecatedWarning('CRM_Core_BAO_MessageTemplate: $params[subject] is deprecated. Use $params[messageTemplate][msg_subject] instead.');
+      $mailContent['subject'] = $subjectOverride;
     }
-    CRM_Core_Smarty::singleton()->popScope();
-    $mailContent['subject'] = trim(preg_replace('/[\r\n]+/', ' ', $mailContent['subject']));
+
     return $mailContent;
   }
 

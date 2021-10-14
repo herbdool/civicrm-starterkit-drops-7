@@ -215,7 +215,7 @@ trait DAOActionTrait {
       if (NULL !== $value) {
 
         if ($field['suffix']) {
-          $options = FormattingUtil::getPseudoconstantList($field, $field['suffix'], $params, $this->getActionName());
+          $options = FormattingUtil::getPseudoconstantList($field, $name, $params, $this->getActionName());
           $value = FormattingUtil::replacePseudoconstant($options, $value, TRUE);
         }
 
@@ -244,15 +244,13 @@ trait DAOActionTrait {
           NULL,
           $entityId,
           FALSE,
-          FALSE,
+          $this->getCheckPermissions(),
           TRUE
         );
       }
     }
 
-    if ($customParams) {
-      $params['custom'] = $customParams;
-    }
+    $params['custom'] = $customParams ?: NULL;
   }
 
   /**
@@ -266,8 +264,8 @@ trait DAOActionTrait {
     if (strpos($fieldExpr, '.') === FALSE) {
       return NULL;
     }
-    list($groupName, $fieldName) = explode('.', $fieldExpr);
-    list($fieldName, $suffix) = array_pad(explode(':', $fieldName), 2, NULL);
+    [$groupName, $fieldName] = explode('.', $fieldExpr);
+    [$fieldName, $suffix] = array_pad(explode(':', $fieldName), 2, NULL);
     $cacheKey = "APIv4_Custom_Fields-$groupName";
     $info = \Civi::cache('metadata')->get($cacheKey);
     if (!isset($info[$fieldName])) {

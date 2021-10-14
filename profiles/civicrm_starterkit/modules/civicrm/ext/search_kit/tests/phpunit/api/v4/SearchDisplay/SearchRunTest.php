@@ -27,7 +27,7 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
   /**
    * Test running a searchDisplay with various filters.
    */
-  public function testRunDisplay() {
+  public function testRunWithFilters() {
     foreach (['Tester', 'Bot'] as $type) {
       ContactType::create(FALSE)
         ->addValue('parent_id.name', 'Individual')
@@ -52,7 +52,7 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
         'api_entity' => 'Contact',
         'api_params' => [
           'version' => 4,
-          'select' => ['id', 'first_name', 'last_name', 'contact_sub_type:label'],
+          'select' => ['id', 'first_name', 'last_name', 'contact_sub_type:label', 'is_deceased'],
           'where' => [],
         ],
       ],
@@ -103,15 +103,19 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
     $params['filters']['first_name'] = ['One', 'Two'];
     $result = civicrm_api4('SearchDisplay', 'run', $params);
     $this->assertCount(2, $result);
-    $this->assertEquals('One', $result[0]['first_name']);
-    $this->assertEquals('Two', $result[1]['first_name']);
+    $this->assertEquals('One', $result[0]['first_name']['raw']);
+    $this->assertEquals('Two', $result[1]['first_name']['raw']);
 
-    $params['filters'] = ['id' => ['>' => $result[0]['id'], '<=' => $result[1]['id'] + 1]];
+    // Raw value should be boolean, view value should be string
+    $this->assertEquals(FALSE, $result[0]['is_deceased']['raw']);
+    $this->assertEquals(ts('No'), $result[0]['is_deceased']['view']);
+
+    $params['filters'] = ['id' => ['>' => $result[0]['id']['raw'], '<=' => $result[1]['id']['raw'] + 1]];
     $params['sort'] = [['first_name', 'ASC']];
     $result = civicrm_api4('SearchDisplay', 'run', $params);
     $this->assertCount(2, $result);
-    $this->assertEquals('Three', $result[0]['first_name']);
-    $this->assertEquals('Two', $result[1]['first_name']);
+    $this->assertEquals('Three', $result[0]['first_name']['raw']);
+    $this->assertEquals('Two', $result[1]['first_name']['raw']);
 
     $params['filters'] = ['contact_sub_type:label' => ['Tester', 'Bot']];
     $result = civicrm_api4('SearchDisplay', 'run', $params);
@@ -120,6 +124,84 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
     $params['filters'] = ['contact_sub_type' => ['Tester']];
     $result = civicrm_api4('SearchDisplay', 'run', $params);
     $this->assertCount(2, $result);
+  }
+
+  /**
+   * Test return values are augmented by tokens.
+   */
+  public function testWithTokens() {
+    $lastName = uniqid(__FUNCTION__);
+    $sampleData = [
+      ['first_name' => 'One', 'last_name' => $lastName, 'source' => 'Unit test'],
+      ['first_name' => 'Two', 'last_name' => $lastName, 'source' => 'Unit test'],
+    ];
+    Contact::save(FALSE)->setRecords($sampleData)->execute();
+
+    $params = [
+      'checkPermissions' => FALSE,
+      'return' => 'page:1',
+      'savedSearch' => [
+        'api_entity' => 'Contact',
+        'api_params' => [
+          'version' => 4,
+          'select' => ['id', 'display_name'],
+          'where' => [['last_name', '=', $lastName]],
+        ],
+      ],
+      'display' => [
+        'type' => 'table',
+        'label' => '',
+        'settings' => [
+          'limit' => 20,
+          'pager' => TRUE,
+          'columns' => [
+            [
+              'key' => 'id',
+              'label' => 'Contact ID',
+              'dataType' => 'Integer',
+              'type' => 'field',
+            ],
+            [
+              'key' => 'display_name',
+              'label' => 'Display Name',
+              'dataType' => 'String',
+              'type' => 'field',
+              'link' => [
+                'path' => 'civicrm/test/token-[sort_name]',
+              ],
+            ],
+          ],
+          'sort' => [
+            ['id', 'ASC'],
+          ],
+        ],
+      ],
+    ];
+
+    $result = civicrm_api4('SearchDisplay', 'run', $params);
+    $this->assertCount(2, $result);
+    $this->assertNotEmpty($result->first()['display_name']['raw']);
+    // Assert that display name was added to the search due to the link token
+    $this->assertNotEmpty($result->first()['sort_name']['raw']);
+
+    // These items are not part of the search, but will be added via links
+    $this->assertArrayNotHasKey('contact_type', $result->first());
+    $this->assertArrayNotHasKey('source', $result->first());
+    $this->assertArrayNotHasKey('last_name', $result->first());
+
+    // Add links
+    $params['display']['settings']['columns'][] = [
+      'type' => 'links',
+      'label' => 'Links',
+      'links' => [
+        ['path' => 'civicrm/test-[source]-[contact_type]'],
+        ['path' => 'civicrm/test-[last_name]'],
+      ],
+    ];
+    $result = civicrm_api4('SearchDisplay', 'run', $params);
+    $this->assertEquals('Individual', $result->first()['contact_type']['raw']);
+    $this->assertEquals('Unit test', $result->first()['source']['raw']);
+    $this->assertEquals($lastName, $result->first()['last_name']['raw']);
   }
 
   /**
@@ -216,14 +298,14 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
     $this->cleanupCachedPermissions();
     $result = civicrm_api4('SearchDisplay', 'run', $params);
     $this->assertCount(1, $result);
-    $this->assertEquals($sampleData['Two'], $result[0]['id']);
+    $this->assertEquals($sampleData['Two'], $result[0]['id']['raw']);
 
     $hooks->setHook('civicrm_aclWhereClause', [$this, 'aclWhereGreaterThan']);
     $this->cleanupCachedPermissions();
     $result = civicrm_api4('SearchDisplay', 'run', $params);
     $this->assertCount(2, $result);
-    $this->assertEquals($sampleData['Three'], $result[0]['id']);
-    $this->assertEquals($sampleData['Four'], $result[1]['id']);
+    $this->assertEquals($sampleData['Three'], $result[0]['id']['raw']);
+    $this->assertEquals($sampleData['Four'], $result[1]['id']['raw']);
   }
 
   public function testWithACLBypass() {
@@ -386,7 +468,7 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
     }
     $this->assertStringContainsString('failed', $error);
 
-    $config->userPermissionClass->permissions = ['administer CiviCRM data'];
+    $config->userPermissionClass->permissions = ['access CiviCRM', 'administer CiviCRM data'];
 
     // Admins can edit the search and the display
     SavedSearch::update()->addWhere('name', '=', $searchName)

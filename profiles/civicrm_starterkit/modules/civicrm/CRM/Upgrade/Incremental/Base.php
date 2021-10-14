@@ -221,6 +221,26 @@ class CRM_Upgrade_Incremental_Base {
   }
 
   /**
+   * Add the specified option group, gracefully if it already exists.
+   *
+   * @param CRM_Queue_TaskContext $ctx
+   * @param array $params
+   * @param array $options
+   *
+   * @return bool
+   */
+  public static function addOptionGroup(CRM_Queue_TaskContext $ctx, $params, $options): bool {
+    $defaults = ['is_active' => 1];
+    $optionDefaults = ['is_active' => 1];
+    $optionDefaults['option_group_id'] = \CRM_Core_BAO_OptionGroup::ensureOptionGroupExists(array_merge($defaults, $params));
+
+    foreach ($options as $option) {
+      \CRM_Core_BAO_OptionValue::ensureOptionValueExists(array_merge($optionDefaults, $option));
+    }
+    return TRUE;
+  }
+
+  /**
    * Do any relevant message template updates.
    *
    * @param CRM_Queue_TaskContext $ctx
@@ -229,7 +249,39 @@ class CRM_Upgrade_Incremental_Base {
   public static function updateMessageTemplates($ctx, $version) {
     $messageTemplateObject = new CRM_Upgrade_Incremental_MessageTemplates($version);
     $messageTemplateObject->updateTemplates();
+  }
 
+  /**
+   * Updated a message token within a template.
+   *
+   * @param CRM_Queue_TaskContext $ctx
+   * @param string $workflowName
+   * @param string $old
+   * @param string $new
+   * @param $version
+   *
+   * @return bool
+   */
+  public static function updateMessageToken($ctx, string $workflowName, string $old, string $new, $version):bool {
+    $messageObj = new CRM_Upgrade_Incremental_MessageTemplates($version);
+    $messageObj->replaceTokenInTemplate($workflowName, $old, $new);
+    return TRUE;
+  }
+
+  /**
+   * Updated a message token within a template.
+   *
+   * @param CRM_Queue_TaskContext $ctx
+   * @param string $old
+   * @param string $new
+   * @param $version
+   *
+   * @return bool
+   */
+  public static function updateActionScheduleToken($ctx, string $old, string $new, $version):bool {
+    $messageObj = new CRM_Upgrade_Incremental_MessageTemplates($version);
+    $messageObj->replaceTokenInActionSchedule($old, $new);
+    return TRUE;
   }
 
   /**

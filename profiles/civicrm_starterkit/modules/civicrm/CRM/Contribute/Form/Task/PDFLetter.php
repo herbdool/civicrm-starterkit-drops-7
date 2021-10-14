@@ -20,6 +20,8 @@
  */
 class CRM_Contribute_Form_Task_PDFLetter extends CRM_Contribute_Form_Task {
 
+  use CRM_Contact_Form_Task_PDFTrait;
+
   /**
    * All the existing templates in the system.
    *
@@ -36,7 +38,7 @@ class CRM_Contribute_Form_Task_PDFLetter extends CRM_Contribute_Form_Task {
    */
   public function preProcess() {
     $this->skipOnHold = $this->skipDeceased = FALSE;
-    CRM_Contact_Form_Task_PDFLetterCommon::preProcess($this);
+    $this->preProcessPDF();
     parent::preProcess();
     $this->assign('single', $this->isSingle());
   }
@@ -55,7 +57,7 @@ class CRM_Contribute_Form_Task_PDFLetter extends CRM_Contribute_Form_Task {
    * @return array
    */
   public function setDefaultValues() {
-    $defaults = [];
+    $defaults = $this->getPDFDefaultValues();
     if (isset($this->_activityId)) {
       $params = ['id' => $this->_activityId];
       CRM_Activity_BAO_Activity::retrieve($params, $defaults);
@@ -64,24 +66,21 @@ class CRM_Contribute_Form_Task_PDFLetter extends CRM_Contribute_Form_Task {
     else {
       $defaults['thankyou_update'] = 1;
     }
-    $defaults = $defaults + CRM_Contact_Form_Task_PDFLetterCommon::setDefaultValues();
     return $defaults;
   }
 
   /**
    * Build the form object.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function buildQuickForm() {
     //enable form element
     $this->assign('suppressForm', FALSE);
 
-    // Build common form elements
-    // use contact form as a base
-    CRM_Contact_Form_Task_PDFLetterCommon::buildQuickForm($this);
-
     // Contribute PDF tasks allow you to email as well, so we need to add email address to those forms
     $this->add('select', 'from_email_address', ts('From Email Address'), $this->_fromEmails, TRUE);
-    CRM_Core_Form_Task_PDFLetterCommon::buildQuickForm($this);
+    $this->addPDFElementsToForm();
 
     // specific need for contributions
     $this->add('static', 'more_options_header', NULL, ts('Thank-you Letter Options'));
@@ -241,13 +240,19 @@ class CRM_Contribute_Form_Task_PDFLetter extends CRM_Contribute_Form_Task {
 
     //CRM-19761
     if (!empty($html)) {
-      $type = $this->getSubmittedValue('document_type');
-
-      if ($type === 'pdf') {
-        CRM_Utils_PDF_Utils::html2pdf($html, "CiviLetter.pdf", FALSE, $formValues);
+      // Set the filename for the PDF using the Activity Subject, if defined. Remove unwanted characters and limit the length to 200 characters.
+      if (!empty($formValues['subject'])) {
+        $fileName = CRM_Utils_File::makeFilenameWithUnicode($formValues['subject'], '_', 200);
       }
       else {
-        CRM_Utils_PDF_Document::html2doc($html, "CiviLetter.$type", $formValues);
+        $fileName = 'CiviLetter';
+      }
+
+      if ($this->getSubmittedValue('document_type') === 'pdf') {
+        CRM_Utils_PDF_Utils::html2pdf($html, $fileName . '.pdf', FALSE, $formValues);
+      }
+      else {
+        CRM_Utils_PDF_Document::html2doc($html, $fileName . '.' . $this->getSubmittedValue('document_type'), $formValues);
       }
     }
 
@@ -545,8 +550,12 @@ class CRM_Contribute_Form_Task_PDFLetter extends CRM_Contribute_Form_Task {
       // no change to normal behaviour to avoid risk of breakage
       $tokenHtml = CRM_Utils_Token::replaceContributionTokens($html_message, $contribution, TRUE, $messageToken);
     }
-    $useSmarty = (defined('CIVICRM_MAIL_SMARTY') && CIVICRM_MAIL_SMARTY);
-    return CRM_Core_BAO_MessageTemplate::renderMessageTemplate(['text' => '', 'html' => $tokenHtml, 'subject' => ''], !$useSmarty, $contact['contact_id'], ['contact' => $contact])['html'];
+    $tokenContext = [
+      'smarty' => (defined('CIVICRM_MAIL_SMARTY') && CIVICRM_MAIL_SMARTY),
+      'contactId' => $contact['contact_id'],
+    ];
+    $smarty = ['contact' => $contact];
+    return CRM_Core_TokenSmarty::render(['html' => $tokenHtml], $tokenContext, $smarty)['html'];
   }
 
 }

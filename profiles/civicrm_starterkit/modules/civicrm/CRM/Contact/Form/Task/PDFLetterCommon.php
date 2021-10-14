@@ -39,30 +39,32 @@ class CRM_Contact_Form_Task_PDFLetterCommon extends CRM_Core_Form_Task_PDFLetter
   /**
    * Build all the data structures needed to build the form.
    *
+   * @deprecated
+   *
    * @param CRM_Core_Form $form
    */
   public static function preProcess(&$form) {
-    CRM_Contact_Form_Task_EmailCommon::preProcessFromAddress($form);
-    $messageText = [];
-    $messageSubject = [];
-    $dao = new CRM_Core_BAO_MessageTemplate();
-    $dao->is_active = 1;
-    $dao->find();
-    while ($dao->fetch()) {
-      $messageText[$dao->id] = $dao->msg_text;
-      $messageSubject[$dao->id] = $dao->msg_subject;
+    CRM_Core_Error::deprecatedFunctionWarning('no alternative');
+    $defaults = [];
+    $form->_fromEmails = CRM_Core_BAO_Email::getFromEmail();
+    if (is_numeric(key($form->_fromEmails))) {
+      $emailID = (int) key($form->_fromEmails);
+      $defaults = CRM_Core_BAO_Email::getEmailSignatureDefaults($emailID);
     }
-
-    $form->assign('message', $messageText);
-    $form->assign('messageSubject', $messageSubject);
-    parent::preProcess($form);
+    if (!Civi::settings()->get('allow_mail_from_logged_in_contact')) {
+      $defaults['from_email_address'] = current(CRM_Core_BAO_Domain::getNameAndEmail(FALSE, TRUE));
+    }
+    $form->setDefaults($defaults);
+    $form->setTitle('Print/Merge Document');
   }
 
   /**
+   * @deprecated
    * @param CRM_Core_Form $form
    * @param int $cid
    */
   public static function preProcessSingle(&$form, $cid) {
+    CRM_Core_Error::deprecatedFunctionWarning('no alternative');
     $form->_contactIds = explode(',', $cid);
     // put contact display name in title for single contact mode
     if (count($form->_contactIds) === 1) {
@@ -178,8 +180,10 @@ class CRM_Contact_Form_Task_PDFLetterCommon extends CRM_Core_Form_Task_PDFLetter
     $mimeType = self::getMimeType($type);
     // ^^ Useful side-effect: consistently throws error for unrecognized types.
 
+    $fileName = self::getFileName($form);
+    $fileName = "$fileName.$type";
+
     if ($type == 'pdf') {
-      $fileName = "CiviLetter.$type";
       CRM_Utils_PDF_Utils::html2pdf($html, $fileName, FALSE, $formValues);
     }
     elseif (!empty($formValues['document_file_path'])) {
@@ -187,7 +191,6 @@ class CRM_Contact_Form_Task_PDFLetterCommon extends CRM_Core_Form_Task_PDFLetter
       CRM_Utils_PDF_Document::printDocuments($html, $fileName, $type, $zip);
     }
     else {
-      $fileName = "CiviLetter.$type";
       CRM_Utils_PDF_Document::html2doc($html, $fileName, $formValues);
     }
 
@@ -213,6 +216,29 @@ class CRM_Contact_Form_Task_PDFLetterCommon extends CRM_Core_Form_Task_PDFLetter
     $form->postProcessHook();
 
     CRM_Utils_System::civiExit();
+  }
+
+  /**
+   * Returns the filename for the pdf by striping off unwanted characters and limits the length to 200 characters.
+   *
+   * @param CRM_Core_Form $form
+   *
+   * @return string
+   *   The name of the file.
+   */
+  private static function getFileName(CRM_Core_Form $form) {
+    if (!empty($form->getSubmittedValue('pdf_file_name'))) {
+      $fileName = CRM_Utils_File::makeFilenameWithUnicode($form->getSubmittedValue('pdf_file_name'), '_', 200);
+    }
+    elseif (!empty($form->getSubmittedValue('subject'))) {
+      $fileName = CRM_Utils_File::makeFilenameWithUnicode($form->getSubmittedValue('subject'), '_', 200);
+    }
+    else {
+      $fileName = 'CiviLetter';
+    }
+    $fileName = self::isLiveMode($form) ? $fileName : $fileName . '_preview';
+
+    return $fileName;
   }
 
   /**

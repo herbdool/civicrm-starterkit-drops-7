@@ -440,7 +440,7 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
         $sendTemplateParams['cc'] = $values['cc_receipt'] ?? NULL;
         $sendTemplateParams['bcc'] = $values['bcc_receipt'] ?? NULL;
         //send email with pdf invoice
-        if (Civi::settings()->get('invoicing') && Civi::settings()->get('invoice_is_email_pdf')) {
+        if (Civi::settings()->get('invoice_is_email_pdf')) {
           $sendTemplateParams['isEmailPdf'] = TRUE;
           $sendTemplateParams['contributionId'] = $values['contribution_id'];
         }
@@ -859,17 +859,17 @@ LEFT JOIN  civicrm_premiums            ON ( civicrm_premiums.entity_id = civicrm
     if ($setDefault) {
       $jsonDecode = json_decode($params);
       $jsonDecode = (array) $jsonDecode->$module;
-      if (!$multilingual && !empty($jsonDecode['default'])) {
-        //monolingual state
-        $jsonDecode += (array) $jsonDecode['default'];
-        unset($jsonDecode['default']);
-      }
-      elseif (!empty($jsonDecode[$tsLocale])) {
+      if ($multilingual && !empty($jsonDecode[$tsLocale])) {
         //multilingual state
         foreach ($jsonDecode[$tsLocale] as $column => $value) {
           $jsonDecode[$column] = $value;
         }
         unset($jsonDecode[$tsLocale]);
+      }
+      elseif (!empty($jsonDecode['default'])) {
+        //monolingual state, or an undefined value in multilingual
+        $jsonDecode += (array) $jsonDecode['default'];
+        unset($jsonDecode['default']);
       }
       return $jsonDecode;
     }

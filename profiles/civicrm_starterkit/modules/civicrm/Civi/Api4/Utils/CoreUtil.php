@@ -60,7 +60,17 @@ class CoreUtil {
    * @return mixed
    */
   public static function getInfoItem(string $entityName, string $keyToReturn) {
-    return self::getApiClass($entityName)::getInfo()[$keyToReturn] ?? NULL;
+    $className = self::getApiClass($entityName);
+    return $className ? $className::getInfo()[$keyToReturn] ?? NULL : NULL;
+  }
+
+  /**
+   * Get name of unique identifier, typically "id"
+   * @param string $entityName
+   * @return string
+   */
+  public static function getIdFieldName(string $entityName): string {
+    return self::getInfoItem($entityName, 'primary_key')[0] ?? 'id';
   }
 
   /**

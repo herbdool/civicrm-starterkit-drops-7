@@ -381,7 +381,7 @@ class CRM_Contact_BAO_Contact extends CRM_Contact_DAO_Contact {
     if (!empty($params['custom']) &&
       is_array($params['custom'])
     ) {
-      CRM_Core_BAO_CustomValueTable::store($params['custom'], 'civicrm_contact', $contact->id);
+      CRM_Core_BAO_CustomValueTable::store($params['custom'], 'civicrm_contact', $contact->id, $isEdit ? 'edit' : 'create');
     }
 
     $transaction->commit();
@@ -1063,7 +1063,7 @@ WHERE     civicrm_contact.id = " . CRM_Utils_Type::escape($id, 'Integer');
     }
 
     //delete the contact id from recently view
-    CRM_Utils_Recent::delContact($id);
+    CRM_Utils_Recent::del(['contact_id' => $id]);
     self::updateContactCache($id, empty($restore));
 
     // delete any prevnext/dupe cache entry
@@ -1614,7 +1614,7 @@ WHERE     civicrm_contact.id = " . CRM_Utils_Type::escape($id, 'Integer');
         else {
           foreach (CRM_Contact_BAO_ContactType::basicTypes() as $type) {
             $fields = array_merge($fields,
-              CRM_Core_BAO_CustomField::getFieldsForImport($type, FALSE, FALSE, $search, $checkPermissions, $withMultiRecord)
+              CRM_Core_BAO_CustomField::getFieldsForImport($type, FALSE, FALSE, $search, $checkPermissions ? CRM_Core_Permission::VIEW : FALSE, $withMultiRecord)
             );
           }
         }

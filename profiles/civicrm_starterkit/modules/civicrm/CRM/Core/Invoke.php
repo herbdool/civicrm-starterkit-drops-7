@@ -103,7 +103,7 @@ class CRM_Core_Invoke {
         return CRM_Utils_System::redirect();
       }
       else {
-        CRM_Core_Error::statusBounce('You do not have permission to execute this url');
+        CRM_Core_Error::statusBounce(ts('You do not have permission to execute this url'));
       }
     }
   }
@@ -399,7 +399,7 @@ class CRM_Core_Invoke {
       // For example - when uninstalling an extension. We already set "triggerRebuild" to true for these operations.
       $config->userSystem->invalidateRouteCache();
     }
-    CRM_Core_DAO_AllCoreTables::reinitializeCache(TRUE);
+
     CRM_Core_ManagedEntities::singleton(TRUE)->reconcile();
   }
 

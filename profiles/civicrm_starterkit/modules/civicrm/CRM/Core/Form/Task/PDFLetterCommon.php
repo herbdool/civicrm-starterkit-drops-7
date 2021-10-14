@@ -36,10 +36,13 @@ class CRM_Core_Form_Task_PDFLetterCommon {
   /**
    * Build the form object.
    *
+   * @deprecated
+   *
    * @var CRM_Core_Form $form
    * @throws \CRM_Core_Exception
    */
   public static function buildQuickForm(&$form) {
+    CRM_Core_Error::deprecatedFunctionWarning('no supported alternative for non-core code');
     // This form outputs a file so should never be submitted via ajax
     $form->preventAjaxSubmit();
 
@@ -52,6 +55,10 @@ class CRM_Core_Form_Task_PDFLetterCommon {
       ['size' => 45, 'maxlength' => 255],
       FALSE
     );
+
+    // Added for core#2121,
+    // To support sending a custom pdf filename before downloading.
+    $form->addElement('hidden', 'pdf_file_name');
 
     $form->addSelect('format_id', [
       'label' => ts('Select Format'),
@@ -167,8 +174,11 @@ class CRM_Core_Form_Task_PDFLetterCommon {
 
   /**
    * Set default values.
+   *
+   * @deprecated
    */
   public static function setDefaultValues() {
+    CRM_Core_Error::deprecatedFunctionWarning('no alternative');
     $defaultFormat = CRM_Core_BAO_PdfFormat::getDefaultValues();
     $defaultFormat['format_id'] = $defaultFormat['id'];
     return $defaultFormat;
@@ -336,10 +346,13 @@ class CRM_Core_Form_Task_PDFLetterCommon {
    * @param array $formValues
    *   The values submitted through the form
    *
+   * @deprecated
+   *
    * @return array
    *   If formValues['is_unit_test'] is true, otherwise outputs document to browser
    */
   public static function renderFromRows($rows, $msgPart, $formValues) {
+    CRM_Core_Error::deprecatedFunctionWarning('no alternative');
     $html = [];
     foreach ($rows as $row) {
       $html[] = $row->render($msgPart);
@@ -357,8 +370,11 @@ class CRM_Core_Form_Task_PDFLetterCommon {
   /**
    * List the available tokens
    * @return array of token name => label
+   *
+   * @deprecated
    */
   public static function listTokens() {
+    CRM_Core_Error::deprecatedFunctionWarning('no alternative');
     $class = get_called_class();
     if (method_exists($class, 'createTokenProcessor')) {
       return $class::createTokenProcessor()->listTokens();
@@ -368,15 +384,25 @@ class CRM_Core_Form_Task_PDFLetterCommon {
   /**
    * Output the pdf or word document from the generated html.
    *
+   * @deprecated
+   *
    * @param array $formValues
    * @param array $html
    */
   protected static function outputFromHtml($formValues, array $html) {
-    if ($formValues['document_type'] === 'pdf') {
-      CRM_Utils_PDF_Utils::html2pdf($html, 'CiviLetter.pdf', FALSE, $formValues);
+    CRM_Core_Error::deprecatedFunctionWarning('no alternative');
+    // Set the filename for the PDF using the Activity Subject, if defined. Remove unwanted characters and limit the length to 200 characters.
+    if (!empty($formValues['subject'])) {
+      $fileName = CRM_Utils_File::makeFilenameWithUnicode($formValues['subject'], '_', 200);
     }
     else {
-      CRM_Utils_PDF_Document::html2doc($html, 'CiviLetter.' . $formValues['document_type'], $formValues);
+      $fileName = 'CiviLetter';
+    }
+    if ($formValues['document_type'] === 'pdf') {
+      CRM_Utils_PDF_Utils::html2pdf($html, $fileName . '.pdf', FALSE, $formValues);
+    }
+    else {
+      CRM_Utils_PDF_Document::html2doc($html, $fileName . '.' . $formValues['document_type'], $formValues);
     }
   }
 

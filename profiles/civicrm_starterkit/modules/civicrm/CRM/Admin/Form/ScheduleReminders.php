@@ -59,7 +59,7 @@ class CRM_Admin_Form_ScheduleReminders extends CRM_Admin_Form {
 
     if ($isEvent) {
       $this->setComponentID(CRM_Utils_Request::retrieve('compId', 'Integer', $this));
-      if (!CRM_Event_BAO_Event::checkPermission($this->getComponentID(), CRM_Core_Permission::EDIT)) {
+      if (!CRM_Event_BAO_Event::checkPermission((int) $this->getComponentID(), CRM_Core_Permission::EDIT)) {
         throw new CRM_Core_Exception(ts('You do not have permission to access this page.'));
       }
     }
@@ -695,8 +695,14 @@ class CRM_Admin_Form_ScheduleReminders extends CRM_Admin_Form {
    * @return array
    */
   public function listTokens() {
-    $tokens = CRM_Core_SelectValues::contactTokens();
-    $tokens = array_merge(CRM_Core_SelectValues::activityTokens(), $tokens);
+    $tokenProcessor = new \Civi\Token\TokenProcessor(\Civi::dispatcher(), [
+      'controller' => get_class(),
+      'smarty' => FALSE,
+      'schema' => ['activityId'],
+    ]);
+    $tokens = $tokenProcessor->listTokens();
+
+    $tokens = array_merge(CRM_Core_SelectValues::contactTokens(), $tokens);
     $tokens = array_merge(CRM_Core_SelectValues::eventTokens(), $tokens);
     $tokens = array_merge(CRM_Core_SelectValues::membershipTokens(), $tokens);
     $tokens = array_merge(CRM_Core_SelectValues::contributionTokens(), $tokens);

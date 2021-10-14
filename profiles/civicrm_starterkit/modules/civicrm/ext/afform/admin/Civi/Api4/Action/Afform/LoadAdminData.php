@@ -4,7 +4,7 @@ namespace Civi\Api4\Action\Afform;
 
 use Civi\AfformAdmin\AfformAdminMeta;
 use Civi\Api4\Afform;
-use Civi\Api4\Entity;
+use Civi\Api4\Utils\CoreUtil;
 use Civi\Api4\Query\SqlExpression;
 
 /**
@@ -62,7 +62,7 @@ class LoadAdminData extends \Civi\Api4\Generic\AbstractAction {
         case 'block':
           $info['definition'] = $this->definition + [
             'title' => '',
-            'block' => $this->entity,
+            'entity_type' => $this->entity,
             'layout' => [],
           ];
           break;
@@ -123,8 +123,8 @@ class LoadAdminData extends \Civi\Api4\Generic\AbstractAction {
           if ($embeddedForm['type'] === 'block') {
             $info['blocks'][$blockTag] = $embeddedForm;
           }
-          if (!empty($embeddedForm['join'])) {
-            $entities = array_unique(array_merge($entities, [$embeddedForm['join']]));
+          if (!empty($embeddedForm['join_entity'])) {
+            $entities = array_unique(array_merge($entities, [$embeddedForm['join_entity']]));
           }
           $scanBlocks($embeddedForm['layout']);
         }
@@ -152,7 +152,7 @@ class LoadAdminData extends \Civi\Api4\Generic\AbstractAction {
     }
 
     if ($info['definition']['type'] === 'block') {
-      $blockEntity = $info['definition']['join'] ?? $info['definition']['block'];
+      $blockEntity = $info['definition']['join_entity'] ?? $info['definition']['entity_type'];
       if ($blockEntity !== '*') {
         $entities[] = $blockEntity;
       }
@@ -161,7 +161,7 @@ class LoadAdminData extends \Civi\Api4\Generic\AbstractAction {
     }
 
     if ($info['definition']['type'] === 'search') {
-      $getFieldsMode = 'search';
+      $getFieldsMode = 'get';
       $displayTags = [];
       if ($newForm) {
         [$searchName, $displayName] = array_pad(explode('.', $this->entity ?? ''), 2, '');
@@ -191,7 +191,7 @@ class LoadAdminData extends \Civi\Api4\Generic\AbstractAction {
       if (!$newForm) {
         $scanBlocks($info['definition']['layout']);
       }
-      $this->loadAvailableBlocks($entities, $info, [['join', 'IS NULL']]);
+      $this->loadAvailableBlocks($entities, $info, [['join_entity', 'IS NULL']]);
     }
 
     // Optimization - since contact fields are a combination of these three,
@@ -209,6 +209,10 @@ class LoadAdminData extends \Civi\Api4\Generic\AbstractAction {
     $result[] = $info;
   }
 
+  /**
+   * @param string $name
+   * @return array|null
+   */
   private function loadForm($name) {
     return Afform::get($this->checkPermissions)
       ->setFormatWhitespace(TRUE)
@@ -233,10 +237,10 @@ class LoadAdminData extends \Civi\Api4\Generic\AbstractAction {
     }
     if ($entities) {
       $blockInfo = Afform::get($this->checkPermissions)
-        ->addSelect('name', 'title', 'block', 'join', 'directive_name', 'repeat')
+        ->addSelect('name', 'title', 'entity_type', 'join_entity', 'directive_name')
         ->setWhere($where)
         ->addWhere('type', '=', 'block')
-        ->addWhere('block', 'IN', $entities)
+        ->addWhere('entity_type', 'IN', $entities)
         ->addWhere('directive_name', 'NOT IN', array_keys($info['blocks']))
         ->execute();
       $info['blocks'] = array_merge(array_values($info['blocks']), (array) $blockInfo);
@@ -262,10 +266,7 @@ class LoadAdminData extends \Civi\Api4\Generic\AbstractAction {
       else {
         $joinCount[$entityName] = 1;
       }
-      $label = Entity::get(FALSE)
-        ->addWhere('name', '=', $entityName)
-        ->addSelect('title')
-        ->execute()->first()['title'];
+      $label = CoreUtil::getInfoItem($entityName, 'title');
       $joinMap[$alias] = $label . $num;
     }
 
@@ -288,6 +289,9 @@ class LoadAdminData extends \Civi\Api4\Generic\AbstractAction {
     return $calcFields;
   }
 
+  /**
+   * @return array[]
+   */
   public function fields() {
     return [
       [

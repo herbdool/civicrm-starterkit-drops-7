@@ -68,6 +68,7 @@ class Admin {
     return [
       'default' => E::ts('Default'),
       'primary' => E::ts('Primary'),
+      'secondary' => E::ts('Secondary'),
       'success' => E::ts('Success'),
       'info' => E::ts('Info'),
       'warning' => E::ts('Warning'),
@@ -82,7 +83,7 @@ class Admin {
   public static function getSchema() {
     $schema = [];
     $entities = \Civi\Api4\Entity::get()
-      ->addSelect('name', 'title', 'type', 'primary_key', 'title_plural', 'description', 'label_field', 'icon', 'paths', 'dao', 'bridge', 'ui_join_filters', 'searchable')
+      ->addSelect('name', 'title', 'title_plural', 'bridge_title', 'type', 'primary_key', 'description', 'label_field', 'icon', 'paths', 'dao', 'bridge', 'ui_join_filters', 'searchable')
       ->addWhere('searchable', '!=', 'none')
       ->addOrderBy('title_plural')
       ->setChain([

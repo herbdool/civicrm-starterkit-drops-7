@@ -12,12 +12,12 @@ core = 7.51
 api = 2
 
 ; Drupal Core
-projects[drupal][version] = "7.80"
+projects[drupal][version] = "7.82"
 
 ; ====== CIVICRM RELATED =========
 
 libraries[civicrm][download][type] = get
-libraries[civicrm][download][url] = "https://download.civicrm.org/civicrm-5.40.2-drupal.tar.gz"
+libraries[civicrm][download][url] = "https://download.civicrm.org/civicrm-5.42.1-drupal.tar.gz"
 libraries[civicrm][destination] = modules
 libraries[civicrm][directory_name] = civicrm
 

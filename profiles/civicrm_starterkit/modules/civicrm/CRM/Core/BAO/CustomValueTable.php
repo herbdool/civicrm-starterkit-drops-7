@@ -155,7 +155,8 @@ class CRM_Core_BAO_CustomValueTable {
 
             case 'File':
               if (!$field['file_id']) {
-                throw new CRM_Core_Exception('Missing parameter file_id');
+                $value = 'null';
+                break;
               }
 
               // need to add/update civicrm_entity_file
@@ -395,15 +396,16 @@ class CRM_Core_BAO_CustomValueTable {
    * @param $entityTable
    * @param int $entityID
    * @param $customFieldExtends
+   * @param $parentOperation
    */
-  public static function postProcess(&$params, $entityTable, $entityID, $customFieldExtends) {
+  public static function postProcess(&$params, $entityTable, $entityID, $customFieldExtends, $parentOperation = NULL) {
     $customData = CRM_Core_BAO_CustomField::postProcess($params,
       $entityID,
       $customFieldExtends
     );
 
     if (!empty($customData)) {
-      self::store($customData, $entityTable, $entityID);
+      self::store($customData, $entityTable, $entityID, $parentOperation);
     }
   }
 
