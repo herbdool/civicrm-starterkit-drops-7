@@ -33,12 +33,6 @@ class CRM_Price_BAO_LineItem extends CRM_Price_DAO_LineItem {
    */
   public static function create(&$params) {
     $id = $params['id'] ?? NULL;
-    if ($id) {
-      CRM_Utils_Hook::pre('edit', 'LineItem', $id, $params);
-    }
-    else {
-      CRM_Utils_Hook::pre('create', 'LineItem', $id, $params);
-    }
 
     // unset entity table and entity id in $params
     // we never update the entity table and entity id during update mode
@@ -56,6 +50,13 @@ class CRM_Price_BAO_LineItem extends CRM_Price_DAO_LineItem {
       $params['tax_amount'] = self::getTaxAmountForLineItem($params);
     }
 
+    // Call the hooks after tax is set in case hooks wish to alter it.
+    if ($id) {
+      CRM_Utils_Hook::pre('edit', 'LineItem', $id, $params);
+    }
+    else {
+      CRM_Utils_Hook::pre('create', 'LineItem', $id, $params);
+    }
     $lineItemBAO = new CRM_Price_BAO_LineItem();
     $lineItemBAO->copyValues($params);
 
@@ -214,8 +215,6 @@ WHERE li.contribution_id = %1";
     ];
 
     $getTaxDetails = FALSE;
-    $invoiceSettings = Civi::settings()->get('contribution_invoice_settings');
-    $invoicing = $invoiceSettings['invoicing'] ?? NULL;
 
     $dao = CRM_Core_DAO::executeQuery("$selectClause $fromClause $whereClause $orderByClause", $params);
     while ($dao->fetch()) {
@@ -257,7 +256,7 @@ WHERE li.contribution_id = %1";
         $getTaxDetails = TRUE;
       }
     }
-    if ($invoicing) {
+    if (Civi::settings()->get('invoicing')) {
       // @todo - this is an inappropriate place to be doing form level assignments.
       $taxTerm = Civi::settings()->get('tax_term');
       $smarty = CRM_Core_Smarty::singleton();
@@ -400,6 +399,9 @@ WHERE li.contribution_id = %1";
           $line['entity_id'] = $entityId;
         }
         if (!empty($line['membership_type_id'])) {
+          if (($line['entity_table'] ?? '') !== 'civicrm_membership') {
+            CRM_Core_Error::deprecatedWarning('entity table should be already set');
+          }
           $line['entity_table'] = 'civicrm_membership';
         }
         if (!empty($contributionDetails->id)) {
@@ -513,17 +515,20 @@ WHERE li.contribution_id = %1";
           }
           $financialType = $values['financial_type_id'];
         }
+        $taxRates = CRM_Core_PseudoConstant::getTaxRates();
+        $taxRate = $taxRates[$financialType] ?? 0;
+        $taxAmount = ($taxRate / 100) * $totalAmount / (1 + ($taxRate / 100));
         $lineItem = [
           'price_field_id' => $values['priceFieldID'],
           'price_field_value_id' => $values['priceFieldValueID'],
           'label' => $values['label'],
           'qty' => 1,
-          'unit_price' => $totalAmount,
-          'line_total' => $totalAmount,
+          'unit_price' => $totalAmount - $taxAmount,
+          'line_total' => $totalAmount - $taxAmount,
           'financial_type_id' => $financialType,
           'membership_type_id' => $values['membership_type_id'],
+          'tax_amount' => $taxAmount,
         ];
-        $lineItem['tax_amount'] = self::getTaxAmountForLineItem($lineItem);
         $params['line_item'][$values['setID']][$values['priceFieldID']] = $lineItem;
         break;
       }

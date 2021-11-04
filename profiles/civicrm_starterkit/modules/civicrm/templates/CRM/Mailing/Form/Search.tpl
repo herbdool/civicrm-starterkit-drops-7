@@ -26,7 +26,7 @@
           {$form.is_archived.html}
         </div>
       </td>
-      {if $form.mailing_status}
+      {if !empty($form.mailing_status)}
          <td width="100%"><label>{if $sms eq 1}{ts}SMS Status{/ts}{else}{ts}Mailing Status{/ts}{/if}</label><br />
            <div class="listing-box" style="height: auto">
              {foreach from=$form.mailing_status item="mailing_status_val"}
@@ -43,7 +43,7 @@
     </tr>
 
     {* language *}
-    {if $form.language}
+    {if !empty($form.language)}
       <tr>
         <td>{$form.language.label} {help id="id-language"}<br />
           {$form.language.html|crmAddClass:big}

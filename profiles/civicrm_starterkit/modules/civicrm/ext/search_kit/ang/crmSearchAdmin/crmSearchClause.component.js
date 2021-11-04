@@ -63,14 +63,14 @@
 
       this.getField = function(expr) {
         if (!meta[expr]) {
-          meta[expr] = searchMeta.parseExpr(expr);
+          meta[expr] = searchMeta.parseExpr(expr).args[0];
         }
         return meta[expr].field;
       };
 
       this.getOptionKey = function(expr) {
         if (!meta[expr]) {
-          meta[expr] = searchMeta.parseExpr(expr);
+          meta[expr] = _.findWhere(searchMeta.parseExpr(expr).args, {type: 'field'});
         }
         return meta[expr].suffix ? meta[expr].suffix.slice(1) : 'id';
       };
@@ -93,15 +93,12 @@
         $('.api4-input.form-inline.ui-sortable-helper').css('margin-left', '' + offset + 'px');
       }
 
-      this.addClause = function() {
-        $timeout(function() {
-          if (ctrl.newClause) {
-            var newIndex = ctrl.clauses.length;
-            ctrl.clauses.push([ctrl.newClause, '=', '']);
-            ctrl.newClause = null;
-            updateOperators(ctrl.clauses[newIndex]);
-          }
-        });
+      this.addClause = function(value) {
+        if (value) {
+          var newIndex = ctrl.clauses.length;
+          ctrl.clauses.push([value, '=', '']);
+          updateOperators(ctrl.clauses[newIndex]);
+        }
       };
 
       this.deleteRow = function(index) {

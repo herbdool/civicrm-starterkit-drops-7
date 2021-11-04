@@ -142,11 +142,14 @@
           if (join.bridge) {
             var bridgeFields = _.cloneDeep(entityFields(join.bridge)),
               bridgeEntity = getEntity(join.bridge),
-              joinFieldNames = _.pluck(joinFields, 'name');
+              joinFieldNames = _.pluck(joinFields, 'name'),
+              // Check if this is a symmetric bridge e.g. RelationshipCache joins Contact to Contact
+              bridgePair = _.keys(bridgeEntity.bridge),
+              symmetric = getField(bridgePair[0], join.bridge).entity === getField(bridgePair[1], join.bridge).entity;
             _.each(bridgeFields, function(field) {
               if (
                 // Only include bridge fields that link back to the original entity
-                (!bridgeEntity.bridge[field.name] || field.fk_entity !== join.entity) &&
+                (!bridgeEntity.bridge[field.name] || field.fk_entity !== join.entity || symmetric) &&
                 // Exclude fields with the same name as those in the original entity
                 !_.includes(joinFieldNames, field.name)
               ) {
@@ -453,8 +456,8 @@
             children: _.transform(CRM.vars.api4.functions, function(result, fn) {
               result.push({
                 id: fn.name + '() AS ' + fn.name.toLowerCase(),
-                text: fn.name + '()',
-                description: fn.name + '(' + describeSqlFn(fn.params) + ')'
+                description: fn.description,
+                text: fn.name + '(' + describeSqlFn(fn.params) + ')'
               });
             })
           };
@@ -604,16 +607,19 @@
       var desc = ' ';
       _.each(params, function(param) {
         desc += ' ';
-        if (param.prefix) {
-          desc += _.filter(param.prefix).join('|') + ' ';
+        if (param.name) {
+          desc += param.name + ' ';
         }
-        if (param.expr === 1) {
+        if (!_.isEmpty(param.flag_before)) {
+          desc += '[' + _.filter(param.name ? [param.name] : _.keys(param.flag_before)).join('|') + '] ';
+        }
+        if (param.max_expr === 1) {
           desc += 'expr ';
-        } else if (param.expr > 1) {
+        } else if (param.max_expr > 1) {
           desc += 'expr, ... ';
         }
-        if (param.suffix) {
-          desc += ' ' + _.filter(param.suffix).join('|') + ' ';
+        if (!_.isEmpty(param.flag_after)) {
+          desc += ' [' + _.filter(param.flag_after).join('|') + '] ';
         }
       });
       return desc.replace(/[ ]+/g, ' ');

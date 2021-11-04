@@ -360,7 +360,7 @@ class CRM_Activity_Form_Activity extends CRM_Contact_Form_Task {
     if ($this->_action & CRM_Core_Action::VIEW) {
       // Get the tree of custom fields.
       $this->_groupTree = CRM_Core_BAO_CustomGroup::getTree('Activity', NULL,
-        $this->_activityId, 0, $this->_activityTypeId
+        $this->_activityId, 0, $this->_activityTypeId, NULL, TRUE, NULL, FALSE, CRM_Core_Permission::VIEW
       );
     }
 
@@ -570,6 +570,7 @@ class CRM_Activity_Form_Activity extends CRM_Contact_Form_Task {
       $count = count(is_array($defaults['target_contact_id']) ? $defaults['target_contact_id'] : explode(',', $defaults['target_contact_id']));
       if ($count > 50) {
         $this->freeze(['target_contact_id']);
+        $this->assign('disable_swap_button', TRUE);
       }
     }
 
@@ -915,17 +916,7 @@ class CRM_Activity_Form_Activity extends CRM_Contact_Form_Task {
       $params['activity_type_id'] = $this->_activityTypeId;
     }
 
-    if (!empty($params['hidden_custom']) &&
-      !isset($params['custom'])
-    ) {
-      $customFields = CRM_Core_BAO_CustomField::getFields('Activity', FALSE, FALSE,
-        $this->_activityTypeId
-      );
-      $customFields = CRM_Utils_Array::crmArrayMerge($customFields,
-        CRM_Core_BAO_CustomField::getFields('Activity', FALSE, FALSE,
-          NULL, NULL, TRUE
-        )
-      );
+    if (!empty($params['hidden_custom']) && !isset($params['custom'])) {
       $params['custom'] = CRM_Core_BAO_CustomField::postProcess($params,
         $this->_activityId,
         'Activity'
@@ -1252,10 +1243,10 @@ class CRM_Activity_Form_Activity extends CRM_Contact_Form_Task {
           if (CRM_Contact_BAO_Contact::checkDomainContact($this->_currentlyViewedContactId)) {
             $displayName .= ' (' . ts('default organization') . ')';
           }
-          CRM_Utils_System::setTitle($displayName . ' - ' . $activityTypeDisplayLabel);
+          $this->setTitle($displayName . ' - ' . $activityTypeDisplayLabel);
         }
         else {
-          CRM_Utils_System::setTitle(ts('%1 Activity', [1 => $activityTypeDisplayLabel]));
+          $this->setTitle(ts('%1 Activity', [1 => $activityTypeDisplayLabel]));
         }
       }
     }

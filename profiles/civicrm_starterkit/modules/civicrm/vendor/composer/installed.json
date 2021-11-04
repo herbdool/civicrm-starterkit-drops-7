@@ -1479,27 +1479,27 @@
     },
     {
         "name": "pear/db",
-        "version": "v1.10.0",
-        "version_normalized": "1.10.0.0",
+        "version": "v1.11.0",
+        "version_normalized": "1.11.0.0",
         "source": {
             "type": "git",
             "url": "https://github.com/pear/DB.git",
-            "reference": "e158c3a48246b67cd8c95856ffbb93de4ef380fe"
+            "reference": "7e4f33dcecd99595df982ef8f56c1d7c2bbeaa21"
         },
         "dist": {
             "type": "zip",
-            "url": "https://api.github.com/repos/pear/DB/zipball/e158c3a48246b67cd8c95856ffbb93de4ef380fe",
-            "reference": "e158c3a48246b67cd8c95856ffbb93de4ef380fe",
+            "url": "https://api.github.com/repos/pear/DB/zipball/7e4f33dcecd99595df982ef8f56c1d7c2bbeaa21",
+            "reference": "7e4f33dcecd99595df982ef8f56c1d7c2bbeaa21",
             "shasum": ""
         },
         "require": {
             "pear/pear-core-minimal": "*"
         },
-        "time": "2020-04-19T19:45:59+00:00",
+        "time": "2021-08-11T00:24:34+00:00",
         "type": "library",
         "extra": {
             "patches_applied": {
-                "Apply CiviCRM Customisations for the pear:db package": "https://raw.githubusercontent.com/civicrm/civicrm-core/a48a43c2b5f6d694fff1cfb99d522c5d9e2459a0/tools/scripts/composer/pear_db_civicrm_changes.patch"
+                "Apply CiviCRM Customisations for the pear:db package": "https://raw.githubusercontent.com/civicrm/civicrm-core/2ad420c394/tools/scripts/composer/pear_db_civicrm_changes.patch"
             }
         },
         "installation-source": "dist",
@@ -1513,7 +1513,7 @@
             "./"
         ],
         "license": [
-            "PHP License v3.01"
+            "PHP-3.01"
         ],
         "authors": [
             {
@@ -1537,7 +1537,11 @@
                 "role": "Developer"
             }
         ],
-        "description": "More info available on: http://pear.php.net/package/DB"
+        "description": "More info available on: http://pear.php.net/package/DB",
+        "support": {
+            "issues": "http://pear.php.net/bugs/search.php?cmd=display&package_name[]=DB",
+            "source": "https://github.com/pear/DB"
+        }
     },
     {
         "name": "pear/log",
@@ -3957,10 +3961,6 @@
             }
         ],
         "description": "The component allows you construct and/or parse Mail messages conforming to  the mail standard. It has support for attachments, multipart messages and HTML  mail. It also interfaces with SMTP to send mail or IMAP, POP3 or mbox to  retrieve e-mail.",
-        "homepage": "https://github.com/zetacomponents",
-        "support": {
-            "issues": "https://github.com/zetacomponents/Mail/issues",
-            "source": "https://github.com/zetacomponents/Mail/tree/1.9.2"
-        }
+        "homepage": "https://github.com/zetacomponents"
     }
 ]

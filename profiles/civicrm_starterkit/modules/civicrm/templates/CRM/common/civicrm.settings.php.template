@@ -379,21 +379,23 @@ if (isset($_ENV['PANTHEON_SITE'])) {
   $civicrm_setting['domain']['customPHPPathDir'] = '/path/to/custom-php-dir';
 }
 
-/**
- * Hardcode other settings.
- */
+// Override the Custom CiviCRM CSS URL
+// $civicrm_setting['domain']['customCSSURL'] = 'http://example.com/example-css-url' ;
 
-// Override the Custom CiviCRM CSS URL (OPTIONAL).
+// Override the Custom CiviCRM CSS URL.
 if (isset($_ENV['PANTHEON_SITE'])) {
   // $civicrm_setting['domain']['customCSSURL'] = '[cms.root]/sites/all/themes/EXAMPLETHEME/css/civicrm.css';
 } else {
   // $civicrm_setting['domain']['customCSSURL'] = 'http://example.com/example-css-url';
 }
 
-// Disable display of Community Messages on home dashboard (OPTIONAL).
+// Disable display of Community Messages on home dashboard
 // $civicrm_setting['domain']['communityMessagesUrl'] = false;
 
-// set triggers to be managed offline per CRM-18212 (OPTIONAL).
+// Disable automatic download / installation of extensions
+// $civicrm_setting['domain']['ext_repo_url'] = false;
+
+// set triggers to be managed offline per CRM-18212
 // $civicrm_setting['domain']['logging_no_trigger_permission'] = 1;
 
 // Override the CMS root path defined by cmsRootPath.
@@ -480,7 +482,7 @@ if (!defined('CIVICRM_MAIL_SMARTY')) {
 
 // Pantheon: if it's not the live site then send all emails to a log file
 if (isset($_ENV['PANTHEON_SITE']) && $_ENV['PANTHEON_ENVIRONMENT'] != 'live') {
-  define('CIVICRM_MAIL_LOG', $pantheon_home . 'files/private/civicrm/ConfigAndLog/mail.log');
+  define('CIVICRM_MAIL_LOG', '[civicrm.private]/ConfigAndLog/mail.log');
 }
 
 // if (!isset($_ENV['PANTHEON_SITE']) && !defined('CIVICRM_MAIL_LOG')) {
@@ -556,9 +558,9 @@ else {
   }
 
   /**
-  * Change this to the IP address of your cache server if it is not on the
-  * same machine (Unix).
-  */
+   * Change this to the IP address of your cache server if it is not on the
+   * same machine (Unix).
+   */
   if (!defined('CIVICRM_DB_CACHE_HOST')) {
     define('CIVICRM_DB_CACHE_HOST', 'localhost');
   }
@@ -578,33 +580,32 @@ else {
   }
 
   /**
-  * Change this if your cache server requires a password (currently only works
-  * with Redis)
-  */
+   * Change this if your cache server requires a password (currently only works
+   * with Redis)
+   */
   if (!defined('CIVICRM_DB_CACHE_PASSWORD')) {
     define('CIVICRM_DB_CACHE_PASSWORD', '' );
   }
 
   /**
-  * Items in cache will expire after the number of seconds specified here.
-  * Default value is 3600 (i.e., after an hour)
-  */
+   * Items in cache will expire after the number of seconds specified here.
+   * Default value is 3600 (i.e., after an hour)
+   */
   if (!defined('CIVICRM_DB_CACHE_TIMEOUT')) {
     define('CIVICRM_DB_CACHE_TIMEOUT', 3600 );
   }
 
   /**
-  * If you are sharing the same cache instance with more than one CiviCRM
-  * database, you will need to set a different value for the following argument
-  * so that each copy of CiviCRM will not interfere with other copies.  If you only
-  * have one copy of CiviCRM, you may leave this set to ''.  A good value for
-  * this if you have two servers might be 'server1_' for the first server, and
-  * 'server2_' for the second server.
-  */
+   * If you are sharing the same cache instance with more than one CiviCRM
+   * database, you will need to set a different value for the following argument
+   * so that each copy of CiviCRM will not interfere with other copies.  If you only
+   * have one copy of CiviCRM, you may leave this set to ''.  A good value for
+   * this if you have two servers might be 'server1_' for the first server, and
+   * 'server2_' for the second server.
+   */
   if (!defined('CIVICRM_DB_CACHE_PREFIX')) {
     define('CIVICRM_DB_CACHE_PREFIX', '');
   }
-
 } // end Pantheon Redis check
 
 /**

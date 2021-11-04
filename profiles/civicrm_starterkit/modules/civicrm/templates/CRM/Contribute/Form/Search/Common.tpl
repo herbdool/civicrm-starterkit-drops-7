@@ -25,7 +25,7 @@
     <label>{ts}Currency{/ts}</label> <br />
     {$form.contribution_currency_type.html|crmAddClass:twenty}
   </td>
-  {if $form.contribution_batch_id.html }
+  {if !empty($form.contribution_batch_id.html)}
     <td>
       {$form.contribution_batch_id.label}<br />
       {$form.contribution_batch_id.html}
@@ -58,12 +58,14 @@
 </tr>
 <tr>
   <td>
-    {$form.contribution_or_softcredits.label} <br />
-    {$form.contribution_or_softcredits.html}<br />
-    <div class="float-left" id="contribution_soft_credit_type_wrapper">
-      {$form.contribution_soft_credit_type_id.label} <br />
-      {$form.contribution_soft_credit_type_id.html|crmAddClass:twenty}
-    </div>
+    {if !empty($form.contribution_or_softcredits)}
+      {$form.contribution_or_softcredits.label} <br />
+      {$form.contribution_or_softcredits.html}<br />
+      <div class="float-left" id="contribution_soft_credit_type_wrapper">
+        {$form.contribution_soft_credit_type_id.label} <br />
+        {$form.contribution_soft_credit_type_id.html|crmAddClass:twenty}
+      </div>
+    {/if}
   </td>
   <td>
     {$form.invoice_number.label} <br />
@@ -136,8 +138,10 @@
     {$form.contribution_source.html|crmAddClass:twenty}
   </td>
   <td>
-    {$form.contribution_product_id.label} <br />
-    {$form.contribution_product_id.html|crmAddClass:twenty}
+    {if !empty($form.contribution_product_id)}
+      {$form.contribution_product_id.label} <br />
+      {$form.contribution_product_id.html|crmAddClass:twenty}
+    {/if}
   </td>
 </tr>
 <tr>

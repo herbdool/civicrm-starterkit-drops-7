@@ -1,16 +1,15 @@
-diff --git a/templates/CRM/common/civicrm.settings.php.template b/templates/CRM/common/civicrm.settings.php.template
-index a89b04864..12c0069de 100644
 --- a/templates/CRM/common/civicrm.settings.php.template
 +++ b/templates/CRM/common/civicrm.settings.php.template
-@@ -59,10 +59,25 @@ if (!defined('CIVICRM_UF')) {
+@@ -59,8 +59,23 @@
      define('CIVICRM_UF', getenv('CIVICRM_UF'));
    }
    else {
 -    define('CIVICRM_UF', '%%cms%%');
+-  }
 +    define('CIVICRM_UF', 'Drupal');
-   }
- }
- 
++  }
++}
++
 +/**
 +* Pantheon:
 +* Populate needed variables based on the Pantheon environment.
@@ -24,12 +23,10 @@ index a89b04864..12c0069de 100644
 +  $pantheon_db .= $_ENV['DB_HOST'] . ':' . $_ENV['DB_PORT'];
 +  // Database
 +  $pantheon_db .= '/' . $_ENV['DB_NAME'] . '?new_link=true';
-+}
-+
+ }
+ 
  /**
-  * Content Management System (CMS) Datasource:
-  *
-@@ -73,7 +88,11 @@ if (!defined('CIVICRM_UF')) {
+@@ -73,7 +88,11 @@
   *      define( 'CIVICRM_UF_DSN', 'mysql://cms_db_username:cms_db_password@db_server/cms_database?new_link=true');
   */
  if (!defined('CIVICRM_UF_DSN') && CIVICRM_UF !== 'UnitTests') {
@@ -42,7 +39,7 @@ index a89b04864..12c0069de 100644
  }
  
  // %%extraSettings%%
-@@ -105,8 +124,11 @@ if (!defined('CIVICRM_DSN')) {
+@@ -105,8 +124,11 @@
    if (CIVICRM_UF === 'UnitTests' && isset($GLOBALS['_CV']['TEST_DB_DSN'])) {
      define('CIVICRM_DSN', $GLOBALS['_CV']['TEST_DB_DSN']);
    }
@@ -55,19 +52,18 @@ index a89b04864..12c0069de 100644
    }
  }
  
-@@ -176,11 +198,20 @@ if (!defined('CIVICRM_LOGGING_DSN')) {
+@@ -176,9 +198,20 @@
   *
   */
  
--global $civicrm_root;
+-$civicrm_root = '%%crmRoot%%';
 +if (isset($_ENV['PANTHEON_SITE'])) {
 +  $civicrm_root = $pantheon_home . 'code/profiles/civicrm_starterkit/modules/civicrm';
 +}
 +else {
 +  $civicrm_root = '/full/path/to/modules/civicrm';
 +}
- 
--$civicrm_root = '%%crmRoot%%';
++
  if (!defined('CIVICRM_TEMPLATE_COMPILEDIR')) {
 -  define( 'CIVICRM_TEMPLATE_COMPILEDIR', '%%templateCompileDir%%');
 +  if (isset($_ENV['PANTHEON_SITE'])) {
@@ -79,7 +75,7 @@ index a89b04864..12c0069de 100644
  }
  
  /**
-@@ -194,6 +225,9 @@ if (!defined('CIVICRM_TEMPLATE_COMPILEDIR')) {
+@@ -192,6 +225,9 @@
   * https://lab.civicrm.org/dev/core/issues/1073
   *
   */
@@ -89,7 +85,7 @@ index a89b04864..12c0069de 100644
  //if (!defined('CIVICRM_TEMPLATE_COMPILE_CHECK')) {
  //  define( 'CIVICRM_TEMPLATE_COMPILE_CHECK', FALSE);
  //}
-@@ -231,7 +265,32 @@ if (!defined('CIVICRM_TEMPLATE_COMPILEDIR')) {
+@@ -229,7 +265,32 @@
   *
   */
  if (!defined('CIVICRM_UF_BASEURL')) {
@@ -123,55 +119,87 @@ index a89b04864..12c0069de 100644
  }
  
  /**
-@@ -240,54 +299,112 @@ if (!defined('CIVICRM_UF_BASEURL')) {
+@@ -238,54 +299,114 @@
   * Uncomment and edit the below as appropriate.
   */
  
 - // Override the Temporary Files directory.
 - // $civicrm_setting['domain']['uploadDir'] = '/path/to/upload-dir' ;
+-
+- // Override the custom files upload directory.
+- // $civicrm_setting['domain']['customFileUploadDir'] = '/path/to/custom-dir';
+-
+- // Override the images directory.
+- // $civicrm_setting['domain']['imageUploadDir'] = '/path/to/image-upload-dir' ;
+-
+- // Override the custom templates directory.
+- // $civicrm_setting['domain']['customTemplateDir'] = '/path/to/template-dir';
+-
+- // Override the Custom php path directory.
+- // $civicrm_setting['domain']['customPHPPathDir'] = '/path/to/custom-php-dir';
+-
+- // Override the extensions directory.
+- // $civicrm_setting['domain']['extensionsDir'] = '/path/to/extensions-dir';
+-
+- // Override the resource url
+- // $civicrm_setting['domain']['userFrameworkResourceURL'] = 'http://example.com/example-resource-url/';
+-
+- // Override the Image Upload URL (System Settings > Resource URLs)
+- // $civicrm_setting['domain']['imageUploadURL'] = 'http://example.com/example-image-upload-url';
+-
+- // Override the Custom CiviCRM CSS URL
+- // $civicrm_setting['domain']['customCSSURL'] = 'http://example.com/example-css-url' ;
+-
+- // Override the extensions resource URL
+- // $civicrm_setting['domain']['extensionsURL'] = 'http://example.com/pathtoextensiondir'
+-
+- // Disable display of Community Messages on home dashboard
+- // $civicrm_setting['domain']['communityMessagesUrl'] = false;
+-
+- // Disable automatic download / installation of extensions
+- // $civicrm_setting['domain']['ext_repo_url'] = false;
+-
+- // set triggers to be managed offline per CRM-18212
+- // $civicrm_setting['domain']['logging_no_trigger_permission'] = 1;
+-
+- // Override the CMS root path defined by cmsRootPath.
+- // define('CIVICRM_CMSDIR', '/path/to/install/root/');
+-
+- // Opt-out of announcements by the CiviCRM core team for releases, paid services, events, etc. Separate each preferred optout category with a comma:
+- //   "offers": paid service offers
+- //   "asks": requests for donations or membership signup/renewal to CiviCRM
+- //   "releases": major release announcements
+- //   "events": announcements of local/national upcoming events
+- // $civicrm_setting['domain']['communityMessagesUrl'] = 'https://alert.civicrm.org/alert?prot=1&ver={ver}&uf={uf}&sid={sid}&lang={lang}&co={co}&optout=offers,asks';
 +/**
 + * Override File directories and URLs.
 + */
 +if (isset($_ENV['PANTHEON_SITE'])) {
 +  // Override the Temporary Files directory.
 +  $civicrm_setting['domain']['uploadDir'] = '[civicrm.private]/upload/';
- 
-- // Override the custom files upload directory.
-- // $civicrm_setting['domain']['customFileUploadDir'] = '/path/to/custom-dir';
++
 +  // Override the Custom Files Upload directory.
 +  $civicrm_setting['domain']['customFileUploadDir'] = '[civicrm.private]/custom/';
- 
-- // Override the images directory.
-- // $civicrm_setting['domain']['imageUploadDir'] = '/path/to/image-upload-dir' ;
++
 +  // Override the Images directory.
 +  $civicrm_setting['domain']['imageUploadDir'] = '[civicrm.files]/persist/contribute/';
- 
-- // Override the custom templates directory.
-- // $civicrm_setting['domain']['customTemplateDir'] = '/path/to/template-dir';
++
 +  // Override the Image Upload URL (System Settings > Resource URLs)
 +  $civicrm_setting['domain']['imageUploadURL'] = '[civicrm.files]/persist/contribute/';
 +} else {
 +  // Override the Temporary Files directory.
 +  $civicrm_setting['domain']['uploadDir'] = '/path/to/upload-dir';
- 
-- // Override the Custom php path directory.
-- // $civicrm_setting['domain']['customPHPPathDir'] = '/path/to/custom-php-dir';
++
 +  // Override the Custom Files Upload directory.
 +  $civicrm_setting['domain']['customFileUploadDir'] = '/path/to/custom-dir';
- 
-- // Override the extensions directory.
-- // $civicrm_setting['domain']['extensionsDir'] = '/path/to/extensions-dir';
++
 +  // Override the Images directory.
 +  $civicrm_setting['domain']['imageUploadDir'] = '/path/to/image-upload-dir';
- 
-- // Override the resource url
-- // $civicrm_setting['domain']['userFrameworkResourceURL'] = 'http://example.com/example-resource-url/';
++
 +  // Override the Image Upload URL (System Settings > Resource URLs)
 +  $civicrm_setting['domain']['imageUploadURL'] = 'http://example.com/example-image-upload-url';
 +}
- 
-- // Override the Image Upload URL (System Settings > Resource URLs)
-- // $civicrm_setting['domain']['imageUploadURL'] = 'http://example.com/example-image-upload-url';
++
 +/**
 + * Override the Resource URL
 + */
@@ -180,9 +208,7 @@ index a89b04864..12c0069de 100644
 +} else {
 +  $civicrm_setting['domain']['userFrameworkResourceURL'] = 'http://example.com/example-resource-url/';
 +}
- 
-- // Override the Custom CiviCRM CSS URL
-- // $civicrm_setting['domain']['customCSSURL'] = 'http://example.com/example-css-url' ;
++
 +/**
 + * Extensions
 + */
@@ -224,43 +250,29 @@ index a89b04864..12c0069de 100644
 +  // Override the Custom PHP directory
 +  $civicrm_setting['domain']['customPHPPathDir'] = '/path/to/custom-php-dir';
 +}
- 
-- // Override the extensions resource URL
-- // $civicrm_setting['domain']['extensionsURL'] = 'http://example.com/pathtoextensiondir'
-+/**
-+ * Hardcode other settings.
-+ */
- 
-- // Disable display of Community Messages on home dashboard
-- // $civicrm_setting['domain']['communityMessagesUrl'] = false;
-+// Override the Custom CiviCRM CSS URL (OPTIONAL).
++
++// Override the Custom CiviCRM CSS URL
++// $civicrm_setting['domain']['customCSSURL'] = 'http://example.com/example-css-url' ;
++
++// Override the Custom CiviCRM CSS URL.
 +if (isset($_ENV['PANTHEON_SITE'])) {
 +  // $civicrm_setting['domain']['customCSSURL'] = '[cms.root]/sites/all/themes/EXAMPLETHEME/css/civicrm.css';
 +} else {
 +  // $civicrm_setting['domain']['customCSSURL'] = 'http://example.com/example-css-url';
 +}
- 
-- // Disable automatic download / installation of extensions
-- // $civicrm_setting['domain']['ext_repo_url'] = false;
-+// Disable display of Community Messages on home dashboard (OPTIONAL).
++
++// Disable display of Community Messages on home dashboard
 +// $civicrm_setting['domain']['communityMessagesUrl'] = false;
- 
-- // set triggers to be managed offline per CRM-18212
-- // $civicrm_setting['domain']['logging_no_trigger_permission'] = 1;
-+// set triggers to be managed offline per CRM-18212 (OPTIONAL).
++
++// Disable automatic download / installation of extensions
++// $civicrm_setting['domain']['ext_repo_url'] = false;
++
++// set triggers to be managed offline per CRM-18212
 +// $civicrm_setting['domain']['logging_no_trigger_permission'] = 1;
- 
-- // Override the CMS root path defined by cmsRootPath.
-- // define('CIVICRM_CMSDIR', '/path/to/install/root/');
++
 +// Override the CMS root path defined by cmsRootPath.
 +// define('CIVICRM_CMSDIR', '/path/to/install/root/');
- 
-- // Opt-out of announcements by the CiviCRM core team for releases, paid services, events, etc. Separate each preferred optout category with a comma:
-- //   "offers": paid service offers
-- //   "asks": requests for donations or membership signup/renewal to CiviCRM
-- //   "releases": major release announcements
-- //   "events": announcements of local/national upcoming events
-- // $civicrm_setting['domain']['communityMessagesUrl'] = 'https://alert.civicrm.org/alert?prot=1&ver={ver}&uf={uf}&sid={sid}&lang={lang}&co={co}&optout=offers,asks';
++
 +// Opt-out of announcements by the CiviCRM core team for releases, paid services, events, etc. Separate each preferred optout category with a comma:
 +//   "offers": paid service offers
 +//   "asks": requests for donations or membership signup/renewal to CiviCRM
@@ -270,7 +282,7 @@ index a89b04864..12c0069de 100644
  
  
  /**
-@@ -315,8 +432,14 @@ if (!defined('CIVICRM_MAIL_SMARTY')) {
+@@ -358,8 +479,14 @@
   * The CIVICRM_MAIL_LOG is a debug option which disables MTA (mail transport agent) interaction.
   * You must disable CIVICRM_MAIL_LOG before CiviCRM will talk to your MTA.
   */
@@ -279,7 +291,7 @@ index a89b04864..12c0069de 100644
 +
 +// Pantheon: if it's not the live site then send all emails to a log file
 +if (isset($_ENV['PANTHEON_SITE']) && $_ENV['PANTHEON_ENVIRONMENT'] != 'live') {
-+  define('CIVICRM_MAIL_LOG', $pantheon_home . 'files/private/civicrm/ConfigAndLog/mail.log');
++  define('CIVICRM_MAIL_LOG', '[civicrm.private]/ConfigAndLog/mail.log');
 +}
 +
 +// if (!isset($_ENV['PANTHEON_SITE']) && !defined('CIVICRM_MAIL_LOG')) {
@@ -287,7 +299,7 @@ index a89b04864..12c0069de 100644
  // }
  
  /**
-@@ -339,7 +462,14 @@ if (!defined('CIVICRM_DOMAIN_ID')) {
+@@ -382,7 +509,14 @@
   * NB: defining a value for environment here prevents it from being set
   * via the browser.
   */
@@ -303,30 +315,22 @@ index a89b04864..12c0069de 100644
  
  /**
   * Settings to enable external caching using a cache server.  This is an
-@@ -365,59 +495,72 @@ if (!defined('CIVICRM_DOMAIN_ID')) {
+@@ -408,59 +542,71 @@
   * To not use any caching (not recommended), use a value of 'NoCache'
   *
   */
 -if (!defined('CIVICRM_DB_CACHE_CLASS')) {
 -  define('CIVICRM_DB_CACHE_CLASS', 'ArrayCache');
 -}
- 
+-
 -/**
 - * Change this to the IP address of your cache server if it is not on the
 - * same machine (Unix).
 - */
 -if (!defined('CIVICRM_DB_CACHE_HOST')) {
 -  define('CIVICRM_DB_CACHE_HOST', 'localhost');
-+if (!empty($_ENV['PANTHEON_SITE'] && !empty($_ENV['CACHE_HOST']))) {
-+  define('CIVICRM_DB_CACHE_CLASS', 'Redis');
-+  define('CIVICRM_DB_CACHE_HOST', $_ENV['CACHE_HOST']);
-+  define('CIVICRM_DB_CACHE_PORT', $_ENV['CACHE_PORT']);
-+  define('CIVICRM_DB_CACHE_PASSWORD', $_ENV['CACHE_PASSWORD']);
-+  define('CIVICRM_DB_CACHE_TIMEOUT', 3600);
-+  define('CIVICRM_DB_CACHE_PREFIX', 'pantheon-redis-civicrm:');
- }
-+else {
- 
+-}
+-
 -/**
 - * Change this if you are not using the standard port for your cache server.
 - *
@@ -335,21 +339,12 @@ index a89b04864..12c0069de 100644
 -if (!defined('CIVICRM_DB_CACHE_PORT')) {
 -  if (CIVICRM_DB_CACHE_CLASS === 'Redis') {
 -    define('CIVICRM_DB_CACHE_PORT', 6379 );
-+  if (!defined('CIVICRM_DB_CACHE_CLASS')) {
-+    define('CIVICRM_DB_CACHE_CLASS', 'ArrayCache');
-   }
+-  }
 -  else {
 -    define('CIVICRM_DB_CACHE_PORT', 11211);
-+
-+  /**
-+  * Change this to the IP address of your cache server if it is not on the
-+  * same machine (Unix).
-+  */
-+  if (!defined('CIVICRM_DB_CACHE_HOST')) {
-+    define('CIVICRM_DB_CACHE_HOST', 'localhost');
-   }
+-  }
 -}
- 
+-
 -/**
 - * Change this if your cache server requires a password (currently only works
 - * with Redis)
@@ -357,6 +352,49 @@ index a89b04864..12c0069de 100644
 -if (!defined('CIVICRM_DB_CACHE_PASSWORD')) {
 -  define('CIVICRM_DB_CACHE_PASSWORD', '' );
 -}
+-
+-/**
+- * Items in cache will expire after the number of seconds specified here.
+- * Default value is 3600 (i.e., after an hour)
+- */
+-if (!defined('CIVICRM_DB_CACHE_TIMEOUT')) {
+-  define('CIVICRM_DB_CACHE_TIMEOUT', 3600 );
+-}
+-
+-/**
+- * If you are sharing the same cache instance with more than one CiviCRM
+- * database, you will need to set a different value for the following argument
+- * so that each copy of CiviCRM will not interfere with other copies.  If you only
+- * have one copy of CiviCRM, you may leave this set to ''.  A good value for
+- * this if you have two servers might be 'server1_' for the first server, and
+- * 'server2_' for the second server.
+- */
+-if (!defined('CIVICRM_DB_CACHE_PREFIX')) {
+-  define('CIVICRM_DB_CACHE_PREFIX', '');
+-}
++
++if (!empty($_ENV['PANTHEON_SITE'] && !empty($_ENV['CACHE_HOST']))) {
++  define('CIVICRM_DB_CACHE_CLASS', 'Redis');
++  define('CIVICRM_DB_CACHE_HOST', $_ENV['CACHE_HOST']);
++  define('CIVICRM_DB_CACHE_PORT', $_ENV['CACHE_PORT']);
++  define('CIVICRM_DB_CACHE_PASSWORD', $_ENV['CACHE_PASSWORD']);
++  define('CIVICRM_DB_CACHE_TIMEOUT', 3600);
++  define('CIVICRM_DB_CACHE_PREFIX', 'pantheon-redis-civicrm:');
++}
++else {
++
++  if (!defined('CIVICRM_DB_CACHE_CLASS')) {
++    define('CIVICRM_DB_CACHE_CLASS', 'ArrayCache');
++  }
++
++  /**
++   * Change this to the IP address of your cache server if it is not on the
++   * same machine (Unix).
++   */
++  if (!defined('CIVICRM_DB_CACHE_HOST')) {
++    define('CIVICRM_DB_CACHE_HOST', 'localhost');
++  }
++
 +  /**
 +   * Change this if you are not using the standard port for your cache server.
 +   *
@@ -370,54 +408,36 @@ index a89b04864..12c0069de 100644
 +      define('CIVICRM_DB_CACHE_PORT', 11211);
 +    }
 +  }
- 
--/**
-- * Items in cache will expire after the number of seconds specified here.
-- * Default value is 3600 (i.e., after an hour)
-- */
--if (!defined('CIVICRM_DB_CACHE_TIMEOUT')) {
--  define('CIVICRM_DB_CACHE_TIMEOUT', 3600 );
--}
++
 +  /**
-+  * Change this if your cache server requires a password (currently only works
-+  * with Redis)
-+  */
++   * Change this if your cache server requires a password (currently only works
++   * with Redis)
++   */
 +  if (!defined('CIVICRM_DB_CACHE_PASSWORD')) {
 +    define('CIVICRM_DB_CACHE_PASSWORD', '' );
 +  }
- 
--/**
-- * If you are sharing the same cache instance with more than one CiviCRM
-- * database, you will need to set a different value for the following argument
-- * so that each copy of CiviCRM will not interfere with other copies.  If you only
-- * have one copy of CiviCRM, you may leave this set to ''.  A good value for
-- * this if you have two servers might be 'server1_' for the first server, and
-- * 'server2_' for the second server.
-- */
--if (!defined('CIVICRM_DB_CACHE_PREFIX')) {
--  define('CIVICRM_DB_CACHE_PREFIX', '');
--}
++
 +  /**
-+  * Items in cache will expire after the number of seconds specified here.
-+  * Default value is 3600 (i.e., after an hour)
-+  */
++   * Items in cache will expire after the number of seconds specified here.
++   * Default value is 3600 (i.e., after an hour)
++   */
 +  if (!defined('CIVICRM_DB_CACHE_TIMEOUT')) {
 +    define('CIVICRM_DB_CACHE_TIMEOUT', 3600 );
 +  }
 +
 +  /**
-+  * If you are sharing the same cache instance with more than one CiviCRM
-+  * database, you will need to set a different value for the following argument
-+  * so that each copy of CiviCRM will not interfere with other copies.  If you only
-+  * have one copy of CiviCRM, you may leave this set to ''.  A good value for
-+  * this if you have two servers might be 'server1_' for the first server, and
-+  * 'server2_' for the second server.
-+  */
++   * If you are sharing the same cache instance with more than one CiviCRM
++   * database, you will need to set a different value for the following argument
++   * so that each copy of CiviCRM will not interfere with other copies.  If you only
++   * have one copy of CiviCRM, you may leave this set to ''.  A good value for
++   * this if you have two servers might be 'server1_' for the first server, and
++   * 'server2_' for the second server.
++   */
 +  if (!defined('CIVICRM_DB_CACHE_PREFIX')) {
 +    define('CIVICRM_DB_CACHE_PREFIX', '');
 +  }
-+
 +} // end Pantheon Redis check
  
  /**
   * The cache system traditionally allowed a wide range of cache-keys, but some
+

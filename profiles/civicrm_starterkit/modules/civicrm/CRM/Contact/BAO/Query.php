@@ -3984,7 +3984,7 @@ WHERE  $smartGroupClause
    */
   public function modifiedDates($values) {
     $this->_useDistinct = TRUE;
-
+    CRM_Core_Error::deprecatedWarning('function should not be reachable');
     // CRM-11281, default to added date if not set
     $fieldTitle = ts('Added Date');
     $fieldName = 'created_date';
@@ -5668,7 +5668,10 @@ civicrm_relationship.start_date > {$today}
           }
           throw new CRM_Core_Exception(ts('Failed to interpret input for search'));
         }
-
+        $emojiWhere = CRM_Utils_SQL::handleEmojiInQuery($value);
+        if ($emojiWhere === '0 = 1') {
+          $value = $emojiWhere;
+        }
         $value = CRM_Utils_Type::escape($value, $dataType);
         // if we don't have a dataType we should assume
         if ($dataType == 'String' || $dataType == 'Text') {

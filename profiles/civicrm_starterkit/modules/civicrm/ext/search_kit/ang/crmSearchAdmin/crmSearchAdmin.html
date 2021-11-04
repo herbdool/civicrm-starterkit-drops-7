@@ -14,7 +14,7 @@
   <form>
     <div class="crm-flex-box">
       <div class="nav-stacked">
-        <input id="crm-saved-search-label" class="form-control" ng-model="$ctrl.savedSearch.label" type="text" required placeholder="{{ ts('Untitled Search') }}" />
+        <input id="crm-saved-search-label" class="form-control" ng-model="$ctrl.savedSearch.label" type="text" required placeholder="{{:: ts('Untitled Search') }}" />
       </div>
       <div class="crm-flex-4 form-inline">
         <label for="crm-search-main-entity">{{:: ts('Search for') }}</label>
@@ -22,9 +22,9 @@
         <div class="btn-group btn-group-md pull-right">
           <button type="button" class="btn" ng-class="{'btn-primary': status === 'unsaved', 'btn-warning': status === 'saving', 'btn-success': status === 'saved'}" ng-disabled="status !== 'unsaved'" ng-click="$ctrl.save()">
             <i class="crm-i" ng-class="{'fa-check': status !== 'saving', 'fa-spin fa-spinner': status === 'saving'}"></i>
-            <span ng-if="status === 'saved'">{{ ts('Saved') }}</span>
-            <span ng-if="status === 'unsaved'">{{ ts('Save') }}</span>
-            <span ng-if="status === 'saving'">{{ ts('Saving...') }}</span>
+            <span ng-if="status === 'saved'">{{:: ts('Saved') }}</span>
+            <span ng-if="status === 'unsaved'">{{:: ts('Save') }}</span>
+            <span ng-if="status === 'saving'">{{:: ts('Saving...') }}</span>
           </button>
         </div>
       </div>
@@ -33,11 +33,8 @@
       <ul class="nav nav-pills nav-stacked" ng-include="'~/crmSearchAdmin/tabs.html'"></ul>
       <div class="crm-flex-4" ng-switch="controls.tab">
         <div ng-switch-when="compose">
-          <div ng-include="'~/crmSearchAdmin/compose/criteria.html'"></div>
-          <div ng-include="'~/crmSearchAdmin/compose/controls.html'"></div>
-          <div ng-include="'~/crmSearchAdmin/compose/debug.html'" ng-if="$ctrl.debug"></div>
-          <div ng-include="'~/crmSearchAdmin/compose/results.html'" class="crm-search-results"></div>
-          <div ng-include="'~/crmSearchAdmin/compose/pager.html'" ng-if="$ctrl.results"></div>
+          <div ng-include="'~/crmSearchAdmin/compose.html'"></div>
+          <crm-search-admin-results-table search="$ctrl.savedSearch"></crm-search-admin-results-table>
         </div>
         <div ng-switch-when="group">
           <fieldset ng-include="'~/crmSearchAdmin/group.html'"></fieldset>

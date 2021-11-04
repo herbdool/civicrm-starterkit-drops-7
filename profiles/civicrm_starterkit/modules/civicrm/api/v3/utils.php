@@ -1088,7 +1088,7 @@ function _civicrm_api3_object_to_array_unique_fields(&$dao, &$values) {
  *   ID of entity per $extends.
  */
 function _civicrm_api3_custom_format_params($params, &$values, $extends, $entityId = NULL) {
-  if (!empty($params['custom'])) {
+  if (!empty($params['custom']) && empty($params['check_permissions'])) {
     // The Import class does the formatting first - ideally it wouldn't but this early return
     // provides transitional support.
     return;
@@ -1115,7 +1115,7 @@ function _civicrm_api3_custom_format_params($params, &$values, $extends, $entity
       }
 
       CRM_Core_BAO_CustomField::formatCustomField($customFieldID, $values['custom'],
-        $value, $extends, $customValueID, $entityId, FALSE, FALSE, TRUE
+        $value, $extends, $customValueID, $entityId, FALSE, !empty($params['check_permissions']), TRUE
       );
     }
   }
@@ -1432,7 +1432,7 @@ function _civicrm_api3_custom_data_get(&$returnArray, $checkPermission, $entity,
     TRUE,
     NULL,
     TRUE,
-    $checkPermission
+    $checkPermission ? CRM_Core_Permission::VIEW : FALSE
   );
   $groupTree = CRM_Core_BAO_CustomGroup::formatGroupTree($groupTree, 1);
   $customValues = [];
@@ -1876,6 +1876,7 @@ function _civicrm_api3_generic_replace_base_params($params) {
   unset($baseParams['values']);
   unset($baseParams['sequential']);
   unset($baseParams['options']);
+  $baseParams['options']['limit'] = 0;
   return $baseParams;
 }
 
@@ -2059,6 +2060,10 @@ function _civicrm_api3_swap_out_aliases(&$apiRequest, $fields) {
  */
 function _civicrm_api3_validate_integer(&$params, $fieldName, &$fieldInfo, $entity) {
   list($fieldValue, $op) = _civicrm_api3_field_value_check($params, $fieldName);
+  if ($fieldName === 'auto_renew' && $fieldValue === TRUE) {
+    // https://lab.civicrm.org/dev/rc/-/issues/14
+    $fieldValue = 1;
+  }
   if (strpos($op, 'NULL') !== FALSE || strpos($op, 'EMPTY') !== FALSE) {
     return;
   }
@@ -2299,11 +2304,8 @@ function _civicrm_api3_api_match_pseudoconstant(&$fieldValue, $entity, $fieldNam
     $options = CRM_Utils_Array::value('values', $options, []);
   }
 
-  // If passed a value-separated string, explode to an array, then re-implode after matching values.
-  $implode = FALSE;
   if (is_string($fieldValue) && strpos($fieldValue, CRM_Core_DAO::VALUE_SEPARATOR) !== FALSE) {
     $fieldValue = CRM_Utils_Array::explodePadded($fieldValue);
-    $implode = TRUE;
   }
   // If passed multiple options, validate each.
   if (is_array($fieldValue)) {
@@ -2311,12 +2313,6 @@ function _civicrm_api3_api_match_pseudoconstant(&$fieldValue, $entity, $fieldNam
       if (!is_array($value)) {
         _civicrm_api3_api_match_pseudoconstant_value($value, $options, $fieldName, CRM_Utils_Array::value('api.required', $fieldInfo));
       }
-    }
-    // TODO: unwrap the call to implodePadded from the conditional and do it always
-    // need to verify that this is safe and doesn't break anything though.
-    // Better yet would be to leave it as an array and ensure that every dao/bao can handle array input
-    if ($implode) {
-      CRM_Utils_Array::implodePadded($fieldValue);
     }
   }
   else {

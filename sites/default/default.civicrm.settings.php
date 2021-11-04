@@ -95,6 +95,8 @@ if (!defined('CIVICRM_UF_DSN') && CIVICRM_UF !== 'UnitTests') {
   }
 }
 
+// %%extraSettings%%
+
 /**
  * CiviCRM Database Settings
  *
@@ -377,21 +379,23 @@ if (isset($_ENV['PANTHEON_SITE'])) {
   $civicrm_setting['domain']['customPHPPathDir'] = '/path/to/custom-php-dir';
 }
 
-/**
- * Hardcode other settings.
- */
+// Override the Custom CiviCRM CSS URL
+// $civicrm_setting['domain']['customCSSURL'] = 'http://example.com/example-css-url' ;
 
-// Override the Custom CiviCRM CSS URL (OPTIONAL).
+// Override the Custom CiviCRM CSS URL.
 if (isset($_ENV['PANTHEON_SITE'])) {
   // $civicrm_setting['domain']['customCSSURL'] = '[cms.root]/sites/all/themes/EXAMPLETHEME/css/civicrm.css';
 } else {
   // $civicrm_setting['domain']['customCSSURL'] = 'http://example.com/example-css-url';
 }
 
-// Disable display of Community Messages on home dashboard (OPTIONAL).
+// Disable display of Community Messages on home dashboard
 // $civicrm_setting['domain']['communityMessagesUrl'] = false;
 
-// set triggers to be managed offline per CRM-18212 (OPTIONAL).
+// Disable automatic download / installation of extensions
+// $civicrm_setting['domain']['ext_repo_url'] = false;
+
+// set triggers to be managed offline per CRM-18212
 // $civicrm_setting['domain']['logging_no_trigger_permission'] = 1;
 
 // Override the CMS root path defined by cmsRootPath.
@@ -554,9 +558,9 @@ else {
   }
 
   /**
-  * Change this to the IP address of your cache server if it is not on the
-  * same machine (Unix).
-  */
+   * Change this to the IP address of your cache server if it is not on the
+   * same machine (Unix).
+   */
   if (!defined('CIVICRM_DB_CACHE_HOST')) {
     define('CIVICRM_DB_CACHE_HOST', 'localhost');
   }
@@ -576,33 +580,32 @@ else {
   }
 
   /**
-  * Change this if your cache server requires a password (currently only works
-  * with Redis)
-  */
+   * Change this if your cache server requires a password (currently only works
+   * with Redis)
+   */
   if (!defined('CIVICRM_DB_CACHE_PASSWORD')) {
     define('CIVICRM_DB_CACHE_PASSWORD', '' );
   }
 
   /**
-  * Items in cache will expire after the number of seconds specified here.
-  * Default value is 3600 (i.e., after an hour)
-  */
+   * Items in cache will expire after the number of seconds specified here.
+   * Default value is 3600 (i.e., after an hour)
+   */
   if (!defined('CIVICRM_DB_CACHE_TIMEOUT')) {
     define('CIVICRM_DB_CACHE_TIMEOUT', 3600 );
   }
 
   /**
-  * If you are sharing the same cache instance with more than one CiviCRM
-  * database, you will need to set a different value for the following argument
-  * so that each copy of CiviCRM will not interfere with other copies.  If you only
-  * have one copy of CiviCRM, you may leave this set to ''.  A good value for
-  * this if you have two servers might be 'server1_' for the first server, and
-  * 'server2_' for the second server.
-  */
+   * If you are sharing the same cache instance with more than one CiviCRM
+   * database, you will need to set a different value for the following argument
+   * so that each copy of CiviCRM will not interfere with other copies.  If you only
+   * have one copy of CiviCRM, you may leave this set to ''.  A good value for
+   * this if you have two servers might be 'server1_' for the first server, and
+   * 'server2_' for the second server.
+   */
   if (!defined('CIVICRM_DB_CACHE_PREFIX')) {
     define('CIVICRM_DB_CACHE_PREFIX', '');
   }
-
 } // end Pantheon Redis check
 
 /**
@@ -618,12 +621,18 @@ if (!defined('CIVICRM_PSR16_STRICT')) {
  * configuration option, but wish to, for example, use fr_CA instead of the
  * default fr_FR (for French), set one or more of the constants below to an
  * appropriate regional value.
+ *
+ * Note that since 5.26.0 specifically https://github.com/civicrm/civicrm-core/pull/16700
+ * This generally doesn't get used by WordPress especially if using the Polylang plugin.
+ * The reason is that the WordPress implementation has been changed to get the full locale
+ * from the WordPress plugin rather than just the 2 string language code.
  */
 // define('CIVICRM_LANGUAGE_MAPPING_FR', 'fr_CA');
 // define('CIVICRM_LANGUAGE_MAPPING_EN', 'en_CA');
 // define('CIVICRM_LANGUAGE_MAPPING_ES', 'es_MX');
 // define('CIVICRM_LANGUAGE_MAPPING_PT', 'pt_BR');
 // define('CIVICRM_LANGUAGE_MAPPING_ZH', 'zh_TW');
+// define('CIVICRM_LANGUAGE_MAPPING_NL', 'nl_BE');
 
 /**
  * Native gettext improves performance of localized CiviCRM installations
@@ -648,19 +657,8 @@ if (!defined('CIVICRM_PSR16_STRICT')) {
  */
 define('CIVICRM_DEADLOCK_RETRIES', 3);
 
-/**
- * Configure MySQL to throw more errors when encountering unusual SQL expressions.
- *
- * If undefined, the value is determined automatically. For CiviCRM tarballs, it defaults
- * to FALSE; for SVN checkouts, it defaults to TRUE.
- */
-// if (!defined('CIVICRM_MYSQL_STRICT')) {
-// define('CIVICRM_MYSQL_STRICT', TRUE );
-// }
-
 if (CIVICRM_UF === 'UnitTests') {
   if (!defined('CIVICRM_CONTAINER_CACHE')) define('CIVICRM_CONTAINER_CACHE', 'auto');
-  if (!defined('CIVICRM_MYSQL_STRICT')) define('CIVICRM_MYSQL_STRICT', true);
 }
 
 /**
@@ -693,15 +691,17 @@ if (CIVICRM_UF === 'UnitTests') {
  * the absolute path. Remember to use your system's DIRECTORY_SEPARATOR the
  * examples below assume /
  *
- * Example: This excludes node_modules (can be huge), various CiviCRM dirs that
+ * The default excludes node_modules (can be huge), various CiviCRM dirs that
  * are unlikely to have anything we need to scan inside, and (what could be
- * your) Drupal's private file storage area.
+ * your) Drupal's private file storage area. It does not exclude
+ * vendor but you are likely to see an improvement by adding it.
  *
- * '@/(\.|node_modules|js/|css/|bower_components|packages/|vendor/|sites/default/files/private)@'
+ * See https://docs.civicrm.org/sysadmin/en/latest/setup/optimizations/#exclude-dirs-that-do-not-need-to-be-scanned
+ * and also discussion on including vendor (excluded) in https://lab.civicrm.org/dev/core/-/issues/2031
  */
-// if (!defined('CIVICRM_EXCLUDE_DIRS_PATTERN')) {
-//   define('CIVICRM_EXCLUDE_DIRS_PATTERN', '@/\.@');
-// }
+if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN' && !defined('CIVICRM_EXCLUDE_DIRS_PATTERN')) {
+  define('CIVICRM_EXCLUDE_DIRS_PATTERN', '@/(\.|node_modules|js/|css/|bower_components|packages/|sites/default/files/private)@');
+}
 
 /**
  *
@@ -719,7 +719,7 @@ if ( set_include_path( $include_path ) === false ) {
 }
 
 if (!defined('CIVICRM_CLEANURL')) {
-  if ( function_exists('variable_get') && variable_get('clean_url', '0') != '0') {
+  if (function_exists('variable_get') && variable_get('clean_url', '0') != '0') {
     define('CIVICRM_CLEANURL', 1 );
   }
   elseif ( function_exists('config_get') && config_get('system.core', 'clean_url') != 0) {

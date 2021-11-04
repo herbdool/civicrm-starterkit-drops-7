@@ -27,7 +27,7 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
   /**
    * Test running a searchDisplay with various filters.
    */
-  public function testRunDisplay() {
+  public function testRunWithFilters() {
     foreach (['Tester', 'Bot'] as $type) {
       ContactType::create(FALSE)
         ->addValue('parent_id.name', 'Individual')
@@ -41,7 +41,7 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
       ['first_name' => 'One', 'last_name' => $lastName, 'contact_sub_type' => ['Tester', 'Bot']],
       ['first_name' => 'Two', 'last_name' => $lastName, 'contact_sub_type' => ['Tester']],
       ['first_name' => 'Three', 'last_name' => $lastName, 'contact_sub_type' => ['Bot']],
-      ['first_name' => 'Four', 'last_name' => $lastName],
+      ['first_name' => 'Four', 'middle_name' => 'None', 'last_name' => $lastName],
     ];
     Contact::save(FALSE)->setRecords($sampleData)->execute();
 
@@ -52,7 +52,7 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
         'api_entity' => 'Contact',
         'api_params' => [
           'version' => 4,
-          'select' => ['id', 'first_name', 'last_name', 'contact_sub_type:label'],
+          'select' => ['id', 'first_name', 'middle_name', 'last_name', 'contact_sub_type:label', 'is_deceased'],
           'where' => [],
         ],
       ],
@@ -103,23 +103,111 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
     $params['filters']['first_name'] = ['One', 'Two'];
     $result = civicrm_api4('SearchDisplay', 'run', $params);
     $this->assertCount(2, $result);
-    $this->assertEquals('One', $result[0]['first_name']);
-    $this->assertEquals('Two', $result[1]['first_name']);
+    $this->assertEquals('One', $result[0]['first_name']['raw']);
+    $this->assertEquals('Two', $result[1]['first_name']['raw']);
 
-    $params['filters'] = ['id' => ['>' => $result[0]['id'], '<=' => $result[1]['id'] + 1]];
+    // Raw value should be boolean, view value should be string
+    $this->assertEquals(FALSE, $result[0]['is_deceased']['raw']);
+    $this->assertEquals(ts('No'), $result[0]['is_deceased']['view']);
+
+    $params['filters'] = ['last_name' => $lastName, 'id' => ['>' => $result[0]['id']['raw'], '<=' => $result[1]['id']['raw'] + 1]];
     $params['sort'] = [['first_name', 'ASC']];
     $result = civicrm_api4('SearchDisplay', 'run', $params);
     $this->assertCount(2, $result);
-    $this->assertEquals('Three', $result[0]['first_name']);
-    $this->assertEquals('Two', $result[1]['first_name']);
+    $this->assertEquals('Three', $result[0]['first_name']['raw']);
+    $this->assertEquals('Two', $result[1]['first_name']['raw']);
 
-    $params['filters'] = ['contact_sub_type:label' => ['Tester', 'Bot']];
+    $params['filters'] = ['last_name' => $lastName, 'contact_sub_type:label' => ['Tester', 'Bot']];
     $result = civicrm_api4('SearchDisplay', 'run', $params);
     $this->assertCount(3, $result);
 
-    $params['filters'] = ['contact_sub_type' => ['Tester']];
+    // Comma indicates first_name OR last_name
+    $params['filters'] = ['first_name,last_name' => $lastName, 'contact_sub_type' => ['Tester']];
     $result = civicrm_api4('SearchDisplay', 'run', $params);
     $this->assertCount(2, $result);
+
+    // Comma indicates first_name OR middle_name, matches "One" or "None"
+    $params['filters'] = ['first_name,middle_name' => 'one', 'last_name' => $lastName];
+    $result = civicrm_api4('SearchDisplay', 'run', $params);
+    $this->assertCount(2, $result);
+  }
+
+  /**
+   * Test return values are augmented by tokens.
+   */
+  public function testWithTokens() {
+    $lastName = uniqid(__FUNCTION__);
+    $sampleData = [
+      ['first_name' => 'One', 'last_name' => $lastName, 'source' => 'Unit test'],
+      ['first_name' => 'Two', 'last_name' => $lastName, 'source' => 'Unit test'],
+    ];
+    Contact::save(FALSE)->setRecords($sampleData)->execute();
+
+    $params = [
+      'checkPermissions' => FALSE,
+      'return' => 'page:1',
+      'savedSearch' => [
+        'api_entity' => 'Contact',
+        'api_params' => [
+          'version' => 4,
+          'select' => ['id', 'display_name'],
+          'where' => [['last_name', '=', $lastName]],
+        ],
+      ],
+      'display' => [
+        'type' => 'table',
+        'label' => '',
+        'settings' => [
+          'limit' => 20,
+          'pager' => TRUE,
+          'columns' => [
+            [
+              'key' => 'id',
+              'label' => 'Contact ID',
+              'dataType' => 'Integer',
+              'type' => 'field',
+            ],
+            [
+              'key' => 'display_name',
+              'label' => 'Display Name',
+              'dataType' => 'String',
+              'type' => 'field',
+              'link' => [
+                'path' => 'civicrm/test/token-[sort_name]',
+              ],
+            ],
+          ],
+          'sort' => [
+            ['id', 'ASC'],
+          ],
+        ],
+      ],
+    ];
+
+    $result = civicrm_api4('SearchDisplay', 'run', $params);
+    $this->assertCount(2, $result);
+    $this->assertNotEmpty($result->first()['display_name']['raw']);
+    // Assert that display name was added to the search due to the link token
+    $this->assertNotEmpty($result->first()['sort_name']['raw']);
+
+    // These items are not part of the search, but will be added via links
+    $this->assertArrayNotHasKey('contact_type', $result->first());
+    $this->assertArrayNotHasKey('source', $result->first());
+    $this->assertArrayNotHasKey('last_name', $result->first());
+
+    // Add links
+    $params['display']['settings']['columns'][] = [
+      'type' => 'links',
+      'label' => 'Links',
+      'links' => [
+        ['path' => 'civicrm/test-[source]-[contact_type]'],
+        ['path' => 'civicrm/test-[last_name]'],
+      ],
+    ];
+    $result = civicrm_api4('SearchDisplay', 'run', $params);
+    $this->assertEquals('Individual', $result->first()['contact_type']['raw']);
+    $this->assertEquals('Unit test', $result->first()['source']['raw']);
+    $this->assertEquals($lastName, $result->first()['last_name']['raw']);
   }
 
   /**
@@ -216,14 +304,14 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
     $this->cleanupCachedPermissions();
     $result = civicrm_api4('SearchDisplay', 'run', $params);
     $this->assertCount(1, $result);
-    $this->assertEquals($sampleData['Two'], $result[0]['id']);
+    $this->assertEquals($sampleData['Two'], $result[0]['id']['raw']);
 
     $hooks->setHook('civicrm_aclWhereClause', [$this, 'aclWhereGreaterThan']);
     $this->cleanupCachedPermissions();
     $result = civicrm_api4('SearchDisplay', 'run', $params);
     $this->assertCount(2, $result);
-    $this->assertEquals($sampleData['Three'], $result[0]['id']);
-    $this->assertEquals($sampleData['Four'], $result[1]['id']);
+    $this->assertEquals($sampleData['Three'], $result[0]['id']['raw']);
+    $this->assertEquals($sampleData['Four'], $result[1]['id']['raw']);
   }
 
   public function testWithACLBypass() {
@@ -386,7 +474,7 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
     }
     $this->assertStringContainsString('failed', $error);
 
-    $config->userPermissionClass->permissions = ['administer CiviCRM data'];
+    $config->userPermissionClass->permissions = ['access CiviCRM', 'administer CiviCRM data'];
 
     // Admins can edit the search and the display
     SavedSearch::update()->addWhere('name', '=', $searchName)
@@ -407,6 +495,77 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
       $error = $e->getMessage();
     }
     $this->assertStringContainsString('failed', $error);
+  }
+
+  /**
+   * Test running a searchDisplay with random sorting.
+   */
+  public function testSortByRand() {
+    $lastName = uniqid(__FUNCTION__);
+    $sampleData = [
+      ['first_name' => 'One', 'last_name' => $lastName],
+      ['first_name' => 'Two', 'last_name' => $lastName],
+      ['first_name' => 'Three', 'last_name' => $lastName],
+      ['first_name' => 'Four', 'last_name' => $lastName],
+    ];
+    Contact::save(FALSE)->setRecords($sampleData)->execute();
+
+    $params = [
+      'checkPermissions' => FALSE,
+      'return' => 'page:1',
+      'savedSearch' => [
+        'api_entity' => 'Contact',
+        'api_params' => [
+          'version' => 4,
+          'select' => ['id', 'first_name', 'last_name'],
+          'where' => [['last_name', '=', $lastName]],
+        ],
+      ],
+      'display' => [
+        'type' => 'list',
+        'label' => '',
+        'settings' => [
+          'limit' => 20,
+          'pager' => TRUE,
+          'columns' => [
+            [
+              'key' => 'first_name',
+              'label' => 'First Name',
+              'dataType' => 'String',
+              'type' => 'field',
+            ],
+          ],
+          'sort' => [
+            ['RAND()', 'ASC'],
+          ],
+        ],
+      ],
+      'afform' => NULL,
+    ];
+
+    // Without seed, results are returned in unpredictable order
+    // (hard to test this, but we can at least assert we get the correct number of results back)
+    $unseeded = civicrm_api4('SearchDisplay', 'run', $params);
+    $this->assertCount(4, $unseeded);
+
+    // Seed must be an integer
+    $params['seed'] = 'hello';
+    try {
+      civicrm_api4('SearchDisplay', 'run', $params);
+      $this->fail();
+    }
+    catch (\API_Exception $e) {
+    }
+
+    // With a random seed, results should be shuffled in stable order
+    $params['seed'] = 12345678987654321;
+    $seeded = civicrm_api4('SearchDisplay', 'run', $params);
+
+    // Same seed, same order every time
+    for ($i = 0; $i <= 9; ++$i) {
+      $repeat = civicrm_api4('SearchDisplay', 'run', $params);
+      $this->assertEquals($seeded->column('id'), $repeat->column('id'));
+    }
   }
 
 }
