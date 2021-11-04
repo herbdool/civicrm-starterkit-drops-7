@@ -330,17 +330,19 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
           $dt = $element['#civicrm_data_type'];
           // Validate state/prov abbreviation
           if ($dt == 'state_province_abbr') {
-            $ckey = str_replace('state_province', 'country', $key);
-            if (!empty($this->crmValues[$ckey]) && is_numeric($this->crmValues[$ckey])) {
-              $country_id = $this->crmValues[$ckey];
-            }
-            else {
-              $country_id = wf_crm_get_civi_setting('defaultContactCountry', 1228);
-            }
-            $states = wf_crm_get_states($country_id);
-            if ($states && !array_key_exists(strtoupper($element['#value']), $states)) {
-              $countries = wf_crm_apivalues('address', 'getoptions', ['field' => 'country_id']);
-              form_error($element, t('Mismatch: "@state" is not a state/province of %country. Please enter a valid state/province abbreviation for %field.', ['@state' => $element['#value'], '%country' => $countries[$country_id], '%field' => $element['#title']]));
+            if (!empty($this->crmValues[$key])) {
+              $ckey = str_replace('state_province', 'country', $key);
+              if (!empty($this->crmValues[$ckey]) && is_numeric($this->crmValues[$ckey])) {
+                $country_id = $this->crmValues[$ckey];
+              }
+              else {
+                $country_id = wf_crm_get_civi_setting('defaultContactCountry', 1228);
+              }
+              $states = wf_crm_get_states($country_id);
+              if ($states && !array_key_exists(strtoupper($element['#value']), $states)) {
+                $countries = wf_crm_apivalues('address', 'getoptions', ['field' => 'country_id']);
+                form_error($element, t('Mismatch: "@state" is not a state/province of %country. Please enter a valid state/province abbreviation for %field.', ['@state' => $element['#value'], '%country' => $countries[$country_id], '%field' => $element['#title']]));
+              }
             }
           }
           // Strings and files don't need any validation
@@ -590,7 +592,7 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
         $m = $contact['address'][1]['master_id'];
         // If master address is exposed to the form, use it
         if (!empty($this->data['contact'][$m]['address'][1])) {
-          $contact['address'][1] = $this->data['contact']['address'][1];
+          $contact['address'][1] = $this->data['contact'][$m]['address'][1];
         }
         // Else look up the master contact's address
         elseif (!empty($this->existing_contacts[$m])) {
@@ -1244,6 +1246,16 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
     foreach (wf_crm_aval($this->data, 'case', []) as $n => $data) {
       if (is_array($data) && !empty($data['case'][1]['client_id'])) {
         $params = $data['case'][1];
+        //Check if webform is set to update the existing case on contact.
+        if (!empty($this->data['case'][$n]['existing_case_status']) && empty($this->ent['case'][$n]['id']) && !empty($this->ent['contact'][$n]['id'])) {
+          $existingCase = $this->findCaseForContact($this->ent['contact'][$n]['id'], [
+            'case_type_id' => wf_crm_aval($this->data['case'][$n], 'case:1:case_type_id'),
+            'status_id' => $this->data['case'][$n]['existing_case_status']
+          ]);
+          if (!empty($existingCase['id'])) {
+            $this->ent['case'][$n]['id'] = $existingCase['id'];
+          }
+        }
         // Set some defaults in create mode
         // Create duplicate case based on existing case if 'duplicate_case' checkbox is checked
         if (empty($this->ent['case'][$n]['id']) || !empty($this->data['case'][$n]['duplicate_case'])) {
@@ -1967,6 +1979,10 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
       $paymentProcessor->setCancelUrl($this->getIpnRedirectUrl('cancel'));
     }
 
+    // Required by (at least) 'Paypal - Website Payments Standard' and 'Redsys'
+    $params['webform_redirect_cancel'] = $this->getIpnRedirectUrl('cancel');
+    $params['webform_redirect_success'] = $this->getIpnRedirectUrl('success');
+
     if (method_exists($paymentProcessor, 'doTransferCheckout')) {
       //Paypal Express checkout
       if(wf_crm_aval($_POST, 'credit_card_number') == 'express'){
@@ -2276,19 +2292,20 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
           $createModeKey = 'civicrm_' . $c . '_contact_' . $n . '_' . $table . '_createmode';
           $multivaluesCreateMode = $this->data['config']['create_mode'][$createModeKey] ?? NULL;
           $cgMaxInstance = $this->all_sets[$table]['max_instances'] ?? 1;
+          $key = $n;
           if (substr($name, 0, 6) == 'custom' && $cgMaxInstance > 1) {
             // Retrieve name for multi value custom fields.
             $customName = $this->getNameForMultiValueFields($multivaluesCreateMode, $name, $table, $c, $n);
-            $n = $c;
+            $key = 1;
           }
           if (!empty($this->ent['contact'][$val]['id'])) {
             unset($this->data[$ent][$c][$table][$n][$name]);
             $tableName = substr($name, 0, 6) == 'custom' ? $ent : $table;
             $fld = $customName ?? $name;
-            $this->data[$ent][$c][$tableName][$n][$fld] = $this->ent['contact'][$val]['id'];
+            $this->data[$ent][$c][$tableName][$key][$fld] = $this->ent['contact'][$val]['id'];
           }
           elseif (substr($name, 0, 6) == 'custom') {
-            $this->data[$ent][$c]['update_contact_ref'][] = $name;
+            $this->data[$ent][$c]['update_contact_ref'][$n][$name] = $val;
           }
         }
       }
@@ -2420,7 +2437,7 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
               // Is this a multi-value custom field?
               if ($cgMaxInstance > 1) {
                 $name = $this->getNameForMultiValueFields($multivaluesCreateMode, $name, $table, $c, $n);
-                $n = $c;
+                $n = 1;
               }
             }
             $this->data[$ent][$c][$ent][$n][$name] = $customValue ?? $val;
@@ -2690,11 +2707,27 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
     $updateParams = [
       'id' => $cid,
     ];
-    foreach ($params['update_contact_ref'] as $refKey) {
-      foreach ($params['contact'] as $contactParams) {
-        foreach ($contactParams as $key => $value) {
-          if (strpos($key, $refKey) === 0 && !isset($updateParams[$key])) {
-            $updateParams[$key] = $value;
+    $skipKeys = [];
+    foreach ($params['update_contact_ref'] as $n => $refKeys) {
+      foreach ($refKeys as $refKey => $val) {
+        // Skip contact ref that doesn't have a valid contact ids.
+        if (empty($this->ent['contact'][$val]['id'])) {
+          continue;
+        }
+        foreach ($params['contact'] as $contactParams) {
+          foreach ($contactParams as $key => $value) {
+            if (strpos($key, "{$refKey}_") === 0 && !isset($updateParams[$key]) && !in_array($key, $skipKeys)) {
+              //If this is an edit to an existing record, remove any matching keys that was previously set to 'create' new records.
+              if (strpos($key, "{$refKey}_-") !== 0) {
+                foreach ($updateParams as $k => $v) {
+                  if (strpos($k, "{$refKey}_-") === 0) {
+                    $skipKeys[] = $k;
+                    unset($updateParams[$k]);
+                  }
+                }
+              }
+              $updateParams[$key] = $value;
+            }
           }
         }
       }
