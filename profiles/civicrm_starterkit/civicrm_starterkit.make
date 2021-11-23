@@ -17,7 +17,7 @@ projects[drupal][version] = "7.80"
 ; ====== CIVICRM RELATED =========
 
 libraries[civicrm][download][type] = get
-libraries[civicrm][download][url] = "https://download.civicrm.org/civicrm-5.43.0-drupal.tar.gz"
+libraries[civicrm][download][url] = "https://download.civicrm.org/civicrm-5.43.2-drupal.tar.gz"
 libraries[civicrm][destination] = modules
 libraries[civicrm][directory_name] = civicrm
 
@@ -64,7 +64,7 @@ projects[wysiwyg][subdir] = "contrib"
 ; === Libraries ===
 
 libraries[ckeditor][download][type] = get
-libraries[ckeditor][download][url] = "http://download.cksource.com/CKEditor/CKEditor/CKEditor%204.9.2/ckeditor_4.9.2_standard.tar.gz"
+libraries[ckeditor][download][url] = "https://download.cksource.com/CKEditor/CKEditor/CKEditor%204.17.1/ckeditor_4.17.1_standard.zip"
 libraries[ckeditor][destination] = libraries
 libraries[ckeditor][directory_name] = ckeditor
 
