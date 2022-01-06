@@ -12,6 +12,7 @@
 
 namespace Civi\Api4\Utils;
 
+use Civi\API\Exception\NotImplementedException;
 use Civi\API\Request;
 use Civi\Api4\Entity;
 use Civi\Api4\Event\CreateApi4RequestEvent;
@@ -45,17 +46,26 @@ class CoreUtil {
   }
 
   /**
-   * Get item from an entity's getInfo array
+   * Get a piece of metadata about an entity
    *
    * @param string $entityName
    * @param string $keyToReturn
    * @return mixed
    */
   public static function getInfoItem(string $entityName, string $keyToReturn) {
-    $info = Entity::get(FALSE)
-      ->addWhere('name', '=', $entityName)
-      ->addSelect($keyToReturn)
-      ->execute()->first();
+    // Because this function might be called thousands of times per request, read directly
+    // from the cache set by Apiv4 Entity.get to avoid the processing overhead of the API wrapper.
+    $cached = \Civi::cache('metadata')->get('api4.entities.info');
+    if ($cached) {
+      $info = $cached[$entityName] ?? NULL;
+    }
+    // If the cache is empty, calling Entity.get will populate it and we'll use it next time.
+    else {
+      $info = Entity::get(FALSE)
+        ->addWhere('name', '=', $entityName)
+        ->addSelect($keyToReturn)
+        ->execute()->first();
+    }
     return $info ? $info[$keyToReturn] ?? NULL : NULL;
   }
 
@@ -228,6 +238,39 @@ class CoreUtil {
       return FALSE;
     }
     return static::checkAccessRecord($apiRequest, $record, $userID);
+  }
+
+  /**
+   * @return \Civi\Api4\Service\Schema\SchemaMap
+   */
+  public static function getSchemaMap() {
+    $cache = \Civi::cache('metadata');
+    $schemaMap = $cache->get('api4.schema.map');
+    if (!$schemaMap) {
+      $schemaMap = \Civi::service('schema_map_builder')->build();
+      $cache->set('api4.schema.map', $schemaMap);
+    }
+    return $schemaMap;
+  }
+
+  /**
+   * Fetches database references + those returned by hook
+   *
+   * @see \CRM_Utils_Hook::referenceCounts()
+   * @param string $entityName
+   * @param int $entityId
+   * @return array{name: string, type: string, count: int, table: string|null, key: string|null}[]
+   * @throws NotImplementedException
+   */
+  public static function getRefCount(string $entityName, $entityId) {
+    $daoName = self::getInfoItem($entityName, 'dao');
+    if (!$daoName) {
+      throw new NotImplementedException("Cannot getRefCount for $entityName - dao not found.");
+    }
+    /** @var \CRM_Core_DAO $dao */
+    $dao = new $daoName();
+    $dao->id = $entityId;
+    return $dao->getReferenceCounts();
   }
 
 }

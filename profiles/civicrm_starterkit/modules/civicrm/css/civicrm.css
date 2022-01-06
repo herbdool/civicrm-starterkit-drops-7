@@ -722,6 +722,7 @@ input.crm-form-entityref {
 
 .crm-container div.empowered-by-logo {
   background: url('../i/civi99.png') no-repeat;
+  background-image: url('../i/civi99.svg'), none;
   display: block;
   line-height: 34px;
   position: absolute;
@@ -859,6 +860,10 @@ input.crm-form-entityref {
 
 .crm-container .bold {
   font-weight: bold;
+}
+
+.crm-container .font-bold {
+  font-weight: bold !important;
 }
 
 .crm-container .font-italic {
@@ -1853,6 +1858,7 @@ input.crm-form-entityref {
   width: 10px;
   padding-top: 4px;
   padding-right: 4px;
+  display: inline-block;
 }
 
 /* crm button style */
@@ -3865,7 +3871,7 @@ span.crm-status-icon {
 }
 
 .crm-container .strikethrough {
-  text-decoration: line-through;
+  text-decoration: line-through !important;
 }
 
 .crm-container input.ng-invalid.ng-dirty,

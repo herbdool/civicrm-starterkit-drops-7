@@ -1096,11 +1096,17 @@ class CRM_Core_BAO_CustomField extends CRM_Core_DAO_CustomField {
       case 'Radio':
       case 'CheckBox':
         if ($field['data_type'] == 'ContactReference' && (is_array($value) || is_numeric($value))) {
-          $displayNames = [];
-          foreach ((array) $value as $contactId) {
-            $displayNames[] = CRM_Core_DAO::getFieldValue('CRM_Contact_DAO_Contact', $contactId, 'display_name');
+          // Issue #2939 - guard against passing empty values to CRM_Core_DAO::getFieldValue(), which would throw an exception
+          if (empty($value)) {
+            $display = '';
           }
-          $display = implode(', ', $displayNames);
+          else {
+            $displayNames = [];
+            foreach ((array) $value as $contactId) {
+              $displayNames[] = CRM_Core_DAO::getFieldValue('CRM_Contact_DAO_Contact', $contactId, 'display_name');
+            }
+            $display = implode(', ', $displayNames);
+          }
         }
         elseif ($field['data_type'] == 'ContactReference') {
           $display = $value;
@@ -1796,21 +1802,21 @@ SELECT $columnName
     $field = new CRM_Core_DAO_CustomField();
     $field->id = $fieldID;
     if (!$field->find(TRUE)) {
-      $errors['fieldID'] = 'Invalid ID for custom field';
+      $errors['fieldID'] = ts('Invalid ID for custom field');
       return $errors;
     }
 
     $oldGroup = new CRM_Core_DAO_CustomGroup();
     $oldGroup->id = $field->custom_group_id;
     if (!$oldGroup->find(TRUE)) {
-      $errors['fieldID'] = 'Invalid ID for old custom group';
+      $errors['fieldID'] = ts('Invalid ID for old custom group');
       return $errors;
     }
 
     $newGroup = new CRM_Core_DAO_CustomGroup();
     $newGroup->id = $newGroupID;
     if (!$newGroup->find(TRUE)) {
-      $errors['newGroupID'] = 'Invalid ID for new custom group';
+      $errors['newGroupID'] = ts('Invalid ID for new custom group');
       return $errors;
     }
 

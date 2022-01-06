@@ -16,6 +16,8 @@
       this.afformEnabled = CRM.crmSearchAdmin.afformEnabled;
       this.afformAdminEnabled = CRM.crmSearchAdmin.afformAdminEnabled;
       this.displayTypes = _.indexBy(CRM.crmSearchAdmin.displayTypes, 'id');
+      this.searchDisplayPath = CRM.url('civicrm/search');
+      this.afformPath = CRM.url('civicrm/admin/afform');
 
       $scope.controls = {tab: 'compose', joinType: 'LEFT'};
       $scope.joinTypes = [
@@ -38,34 +40,29 @@
         this.groupExists = !!this.savedSearch.groups.length;
 
         if (!this.savedSearch.id) {
+          var defaults = {
+            version: 4,
+            select: getDefaultSelect(),
+            orderBy: {},
+            where: [],
+          };
+          _.each(['groupBy', 'join', 'having'], function(param) {
+            if (ctrl.paramExists(param)) {
+              defaults[param] = [];
+            }
+          });
+
           $scope.$bindToRoute({
             param: 'params',
             expr: '$ctrl.savedSearch.api_params',
             deep: true,
-            default: {
-              version: 4,
-              select: getDefaultSelect(),
-              orderBy: {},
-              where: [],
-            }
+            default: defaults
           });
         }
 
         $scope.mainEntitySelect = searchMeta.getPrimaryAndSecondaryEntitySelect();
 
         $scope.$watchCollection('$ctrl.savedSearch.api_params.select', onChangeSelect);
-
-        if (this.paramExists('groupBy')) {
-          this.savedSearch.api_params.groupBy = this.savedSearch.api_params.groupBy || [];
-        }
-
-        if (this.paramExists('join')) {
-          this.savedSearch.api_params.join = this.savedSearch.api_params.join || [];
-        }
-
-        if (this.paramExists('having')) {
-          this.savedSearch.api_params.having = this.savedSearch.api_params.having || [];
-        }
 
         $scope.$watch('$ctrl.savedSearch', onChangeAnything, true);
 
@@ -138,9 +135,10 @@
       };
 
       this.addDisplay = function(type) {
+        var count = _.filter(ctrl.savedSearch.displays, {type: type}).length;
         ctrl.savedSearch.displays.push({
           type: type,
-          label: ''
+          label: ctrl.displayTypes[type].label + (count ? ' ' + (++count) : '')
         });
         $scope.selectTab('display_' + (ctrl.savedSearch.displays.length - 1));
       };
@@ -156,10 +154,13 @@
           }
           if (display.trashed && afformLoad) {
             afformLoad.then(function() {
-              if (ctrl.afforms[display.name]) {
-                var msg = ctrl.afforms[display.name].length === 1 ?
-                  ts('Form "%1" will be deleted if the embedded display "%2" is deleted.', {1: ctrl.afforms[display.name][0].title, 2: display.label}) :
-                  ts('%1 forms will be deleted if the embedded display "%2" is deleted.', {1: ctrl.afforms[display.name].length, 2: display.label});
+              var displayForms = _.filter(ctrl.afforms, function(form) {
+                return _.includes(form.displays, ctrl.savedSearch.name + '.' + display.name);
+              });
+              if (displayForms.length) {
+                var msg = displayForms.length === 1 ?
+                  ts('Form "%1" will be deleted if the embedded display "%2" is deleted.', {1: displayForms[0].title, 2: display.label}) :
+                  ts('%1 forms will be deleted if the embedded display "%2" is deleted.', {1: displayForms.length, 2: display.label});
                 CRM.alert(msg, ts('Display embedded'), 'alert');
               }
             });
@@ -423,7 +424,7 @@
       // Is a column eligible to use an aggregate function?
       this.canAggregate = function(col) {
         // If the query does not use grouping, never
-        if (!ctrl.savedSearch.api_params.groupBy.length) {
+        if (!ctrl.savedSearch.api_params.groupBy || !ctrl.savedSearch.api_params.groupBy.length) {
           return false;
         }
         var arg = _.findWhere(searchMeta.parseExpr(col).args, {type: 'field'}) || {};
@@ -627,33 +628,15 @@
       }
 
       // Build a list of all possible links to main entity & join entities
+      // @return {Array}
       this.buildLinks = function() {
         function addTitle(link, entityName) {
-          switch (link.action) {
-            case 'view':
-              link.title = ts('View %1', {1: entityName});
-              link.icon = 'fa-external-link';
-              link.style = 'default';
-              break;
-
-            case 'update':
-              link.title = ts('Edit %1', {1: entityName});
-              link.icon = 'fa-pencil';
-              link.style = 'default';
-              break;
-
-            case 'delete':
-              link.title = ts('Delete %1', {1: entityName});
-              link.icon = 'fa-trash';
-              link.style = 'danger';
-              break;
-          }
+          link.text = link.text.replace('%1', entityName);
         }
 
         // Links to main entity
-        // @return {Array}
         var mainEntity = searchMeta.getEntity(ctrl.savedSearch.api_entity),
-          links = _.cloneDeep(mainEntity.paths || []);
+          links = _.cloneDeep(mainEntity.links || []);
         _.each(links, function(link) {
           link.join = '';
           addTitle(link, mainEntity.title);
@@ -662,24 +645,13 @@
         _.each(ctrl.savedSearch.api_params.join, function(joinClause) {
           var join = searchMeta.getJoin(joinClause[0]),
             joinEntity = searchMeta.getEntity(join.entity),
-            primaryKey = joinEntity.primary_key[0],
-            // Links for aggregate columns get aggregated using GROUP_CONCAT
-            isAggregate = ctrl.canAggregate(join.alias + '.' + primaryKey),
-            joinPrefix = (isAggregate ? ctrl.DEFAULT_AGGREGATE_FN + '_' : '') + join.alias + '.',
             bridgeEntity = _.isString(joinClause[2]) ? searchMeta.getEntity(joinClause[2]) : null;
-          _.each(joinEntity.paths, function(path) {
-            var link = _.cloneDeep(path);
-            link.path = link.path.replace(/\[/g, '[' + joinPrefix);
-            if (isAggregate) {
-              link.path = link.path.replace(/[.:]/g, '_');
-            }
+          _.each(_.cloneDeep(joinEntity.links), function(link) {
             link.join = join.alias;
             addTitle(link, join.label);
             links.push(link);
           });
-          _.each(bridgeEntity && bridgeEntity.paths, function(path) {
-            var link = _.cloneDeep(path);
-            link.path = link.path.replace(/\[/g, '[' + join.alias + '.');
+          _.each(_.cloneDeep(bridgeEntity && bridgeEntity.links), function(link) {
             link.join = join.alias;
             addTitle(link, join.label + (bridgeEntity.bridge_title ? ' ' + bridgeEntity.bridge_title : ''));
             links.push(link);
@@ -695,9 +667,7 @@
               if (!ctrl.canAggregate(idFieldName)) {
                 var joinEntity = searchMeta.getEntity(idField.fk_entity),
                   label = (idField.join ? idField.join.label + ': ' : '') + (idField.input_attrs && idField.input_attrs.label || idField.label);
-                _.each((joinEntity || {}).paths, function(path) {
-                  var link = _.cloneDeep(path);
-                  link.path = link.path.replace(/\[id/g, '[' + idFieldName);
+                _.each(_.cloneDeep(joinEntity && joinEntity.links), function(link) {
                   link.join = idFieldName;
                   addTitle(link, label);
                   links.push(link);
@@ -706,38 +676,35 @@
             }
           }
         });
-        return _.uniq(links, 'path');
+        return links;
       };
 
       function loadAfforms() {
+        ctrl.afforms = null;
         if (ctrl.afformEnabled && ctrl.savedSearch.id) {
           var findDisplays = _.transform(ctrl.savedSearch.displays, function(findDisplays, display) {
             if (display.id && display.name) {
               findDisplays.push(['search_displays', 'CONTAINS', ctrl.savedSearch.name + '.' + display.name]);
             }
-          }, []);
-          if (findDisplays.length) {
-            afformLoad = crmApi4('Afform', 'get', {
-              select: ['name', 'title', 'search_displays'],
-              where: [['OR', findDisplays]]
-            }).then(function(afforms) {
-              ctrl.afforms = {};
-              _.each(afforms, function(afform) {
-                _.each(_.uniq(afform.search_displays), function(searchNameDisplayName) {
-                  var displayName = searchNameDisplayName.split('.')[1];
-                  ctrl.afforms[displayName] = ctrl.afforms[displayName] || [];
-                  ctrl.afforms[displayName].push({
-                    title: afform.title,
-                    link: ctrl.afformAdminEnabled ? CRM.url('civicrm/admin/afform#/edit/' + afform.name) : '',
-                  });
-                });
+          }, [['search_displays', 'CONTAINS', ctrl.savedSearch.name]]);
+          afformLoad = crmApi4('Afform', 'get', {
+            select: ['name', 'title', 'search_displays'],
+            where: [['OR', findDisplays]]
+          }).then(function(afforms) {
+            ctrl.afforms = [];
+            _.each(afforms, function(afform) {
+              ctrl.afforms.push({
+                title: afform.title,
+                displays: afform.search_displays,
+                link: ctrl.afformAdminEnabled ? CRM.url('civicrm/admin/afform#/edit/' + afform.name) : '',
               });
             });
-          }
+            ctrl.afformCount = ctrl.afforms.length;
+          });
         }
       }
 
-      // Creating an Afform opens a new tab, so when switching back to this tab, re-check for Afforms
+      // Creating an Afform opens a new tab, so when switching back after > 10 sec, re-check for Afforms
       $(window).on('focus', _.debounce(function() {
         $scope.$apply(loadAfforms);
       }, 10000, {leading: true, trailing: false}));
