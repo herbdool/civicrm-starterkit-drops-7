@@ -1197,7 +1197,6 @@ UPDATE  civicrm_participant
 
     //pull required participants, contacts, events  data, if not in hand
     static $eventDetails = [];
-    static $domainValues = [];
     static $contactDetails = [];
 
     $contactIds = $eventIds = $participantDetails = [];
@@ -1235,31 +1234,9 @@ UPDATE  civicrm_participant
       }
     }
 
-    //get the domain values.
-    if (empty($domainValues)) {
-      // making all tokens available to templates.
-      $domain = CRM_Core_BAO_Domain::getDomain();
-      $tokens = [
-        'domain' => ['name', 'phone', 'address', 'email'],
-        'contact' => CRM_Core_SelectValues::contactTokens(),
-      ];
-
-      foreach ($tokens['domain'] as $token) {
-        $domainValues[$token] = CRM_Utils_Token::getDomainTokenReplacement($token, $domain);
-      }
-    }
-
     //get all required contacts detail.
     if (!empty($contactIds)) {
-      // get the contact details.
-      list($currentContactDetails) = CRM_Utils_Token::getTokenDetails($contactIds, NULL,
-        FALSE, FALSE, NULL,
-        [],
-        'CRM_Event_BAO_Participant'
-      );
-      foreach ($currentContactDetails as $contactId => $contactValues) {
-        $contactDetails[$contactId] = $contactValues;
-      }
+      $contactDetails += civicrm_api3('Contact', 'get', ['id' => ['IN' => $contactIds, 'return' => 'display_name']])['values'];
     }
 
     //get all required events detail.
@@ -1327,8 +1304,7 @@ UPDATE  civicrm_participant
             $mail = self::sendTransitionParticipantMail($additionalId,
               $participantDetails[$additionalId],
               $eventDetails[$participantDetails[$additionalId]['event_id']],
-              $contactDetails[$participantDetails[$additionalId]['contact_id']],
-              $domainValues,
+              NULL,
               $emailType
             );
 
@@ -1347,8 +1323,7 @@ UPDATE  civicrm_participant
         $mail = self::sendTransitionParticipantMail($participantId,
           $participantValues,
           $eventDetails[$participantValues['event_id']],
-          $contactDetails[$participantValues['contact_id']],
-          $domainValues,
+          NULL,
           $emailType
         );
 
@@ -1394,8 +1369,6 @@ UPDATE  civicrm_participant
    *   Required event details.
    * @param array $contactDetails
    *   Required contact details.
-   * @param array $domainValues
-   *   Required domain values.
    * @param string $mailType
    *   (eg 'approval', 'confirm', 'expired' ).
    *
@@ -1406,12 +1379,17 @@ UPDATE  civicrm_participant
     $participantValues,
     $eventDetails,
     $contactDetails,
-    &$domainValues,
     $mailType
   ) {
     //send emails.
     $mailSent = FALSE;
 
+    if (!$contactDetails) {
+      $contactDetails = civicrm_api3('Contact', 'getsingle', [
+        'id' => $participantValues['contact_id'],
+        'return' => ['email', 'display_name'],
+      ]);
+    }
     //don't send confirmation mail to additional
     //since only primary able to confirm registration.
     if (!empty($participantValues['registered_by_id']) &&
@@ -1437,26 +1415,25 @@ UPDATE  civicrm_participant
       }
 
       //take a receipt from as event else domain.
-      $receiptFrom = $domainValues['name'] . ' <' . $domainValues['email'] . '>';
+      $receiptFrom = CRM_Core_BAO_Domain::getFromEmail();
+
       if (!empty($eventDetails['confirm_from_name']) && !empty($eventDetails['confirm_from_email'])) {
         $receiptFrom = $eventDetails['confirm_from_name'] . ' <' . $eventDetails['confirm_from_email'] . '>';
       }
 
-      list($mailSent, $subject, $message, $html) = CRM_Core_BAO_MessageTemplate::sendTemplate(
+      list($mailSent, $subject) = CRM_Core_BAO_MessageTemplate::sendTemplate(
         [
-          'groupName' => 'msg_tpl_workflow_event',
-          'valueName' => 'participant_' . strtolower($mailType),
+          'workflow' => 'participant_' . strtolower($mailType),
           'contactId' => $contactId,
+          'tokenContext' => ['participantId' => $participantId],
           'tplParams' => [
-            'contact' => $contactDetails,
-            'domain' => $domainValues,
             'participant' => $participantValues,
             'event' => $eventDetails,
             'paidEvent' => $eventDetails['is_monetary'] ?? NULL,
             'isShowLocation' => $eventDetails['is_show_location'] ?? NULL,
             'isAdditional' => $participantValues['registered_by_id'],
-            'isExpired' => $mailType == 'Expired',
-            'isConfirm' => $mailType == 'Confirm',
+            'isExpired' => $mailType === 'Expired',
+            'isConfirm' => $mailType === 'Confirm',
             'checksumValue' => $checksumValue,
           ],
           'from' => $receiptFrom,

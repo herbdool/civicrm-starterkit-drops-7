@@ -144,6 +144,11 @@ class TokenRow {
   /**
    * Update the value of a token.
    *
+   * If you are reading this it probably means you can't follow this function.
+   * Don't worry - I've stared at it & all I see is a bunch of letters. However,
+   * the answer to your problem is almost certainly that you are passing in null
+   * rather than an empty string for 'c'.
+   *
    * @param string|array $a
    * @param string|array $b
    * @param mixed $c
@@ -275,7 +280,7 @@ class TokenRow {
                 $htmlTokens[$entity][$field] = \CRM_Utils_String::purifyHTML($value);
               }
               else {
-                $htmlTokens[$entity][$field] = is_object($value) ? $value : htmlentities($value);
+                $htmlTokens[$entity][$field] = is_object($value) ? $value : htmlentities($value, ENT_QUOTES);
               }
             }
           }

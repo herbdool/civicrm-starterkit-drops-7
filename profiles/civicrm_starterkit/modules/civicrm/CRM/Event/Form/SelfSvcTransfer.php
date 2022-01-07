@@ -417,22 +417,6 @@ class CRM_Event_Form_SelfSvcTransfer extends CRM_Core_Form {
    * return @ void
    */
   public function sendCancellation() {
-    $domainValues = [];
-    $domain = CRM_Core_BAO_Domain::getDomain();
-    $tokens = [
-      'domain' =>
-      [
-        'name',
-        'phone',
-        'address',
-        'email',
-      ],
-      'contact' => CRM_Core_SelectValues::contactTokens(),
-    ];
-    foreach ($tokens['domain'] as $token) {
-      $domainValues[$token] = CRM_Utils_Token::getDomainTokenReplacement($token, $domain);
-    }
-
     $participantRoles = CRM_Event_PseudoConstant::participantRole();
     $participantDetails = [];
     $query = "SELECT * FROM civicrm_participant WHERE id = {$this->_from_participant_id}";
@@ -458,23 +442,12 @@ class CRM_Event_Form_SelfSvcTransfer extends CRM_Core_Form {
     //get the location info
     $locParams = ['entity_id' => $this->_event_id, 'entity_table' => 'civicrm_event'];
     $eventDetails[$this->_event_id]['location'] = CRM_Core_BAO_Location::getValues($locParams, TRUE);
-    //get contact details
-    $contactIds[$this->_from_contact_id] = $this->_from_contact_id;
-    list($currentContactDetails) = CRM_Utils_Token::getTokenDetails($contactIds, NULL,
-      FALSE, FALSE, NULL, [],
-      'CRM_Event_BAO_Participant'
-    );
-    foreach ($currentContactDetails as $contactId => $contactValues) {
-      $contactDetails[$this->_from_contact_id] = $contactValues;
-    }
     //send a 'cancelled' email to user, and cc the event's cc_confirm email
-    $mail = CRM_Event_BAO_Participant::sendTransitionParticipantMail($this->_from_participant_id,
+    CRM_Event_BAO_Participant::sendTransitionParticipantMail($this->_from_participant_id,
       $participantDetails[$this->_from_participant_id],
       $eventDetails[$this->_event_id],
-      $contactDetails[$this->_from_contact_id],
-      $domainValues,
-      "Transferred",
-      ""
+      NULL,
+      'Transferred'
     );
     $statusMsg = ts('Event registration information for %1 has been updated.', [1 => $this->_contact_name]);
     $statusMsg .= ' ' . ts('A cancellation email has been sent to %1.', [1 => $this->_contact_email]);

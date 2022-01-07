@@ -229,7 +229,19 @@ if (isset($_ENV['PANTHEON_SITE']) && $_ENV['PANTHEON_ENVIRONMENT'] == 'live') {
   define( 'CIVICRM_TEMPLATE_COMPILE_CHECK', FALSE);
 }
 //if (!defined('CIVICRM_TEMPLATE_COMPILE_CHECK')) {
-//  define( 'CIVICRM_TEMPLATE_COMPILE_CHECK', FALSE);
+//  define('CIVICRM_TEMPLATE_COMPILE_CHECK', FALSE);
+//}
+
+/**
+ * Smarty escape on output.
+ *
+ * This tells smarty to pass all variables through the escape function
+ * unless they are piped to smarty:nodefaults (eg. {$myScript|smarty:nodefaults}
+ * At this stage it should only be enabled on development sites.
+ * @see https://github.com/civicrm/civicrm-core/pull/21935
+ */
+//if (!defined('CIVICRM_SMARTY_DEFAULT_ESCAPE')) {
+//  define('CIVICRM_SMARTY_DEFAULT_ESCAPE', TRUE);
 //}
 
 /**

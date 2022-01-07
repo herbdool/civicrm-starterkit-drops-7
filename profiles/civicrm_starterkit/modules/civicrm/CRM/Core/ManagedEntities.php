@@ -135,6 +135,28 @@ class CRM_Core_ManagedEntities {
   }
 
   /**
+   * Force-revert a record back to its original state.
+   * @param array $params
+   *   Key->value properties of CRM_Core_DAO_Managed used to match an existing record
+   */
+  public function revert(array $params) {
+    $mgd = new \CRM_Core_DAO_Managed();
+    $mgd->copyValues($params);
+    $mgd->find(TRUE);
+    $this->loadDeclarations();
+    $declarations = CRM_Utils_Array::findAll($this->declarations, [
+      'module' => $mgd->module,
+      'name' => $mgd->name,
+      'entity' => $mgd->entity_type,
+    ]);
+    if ($mgd->id && isset($declarations[0])) {
+      $this->updateExistingEntity($mgd, ['update' => 'always'] + $declarations[0]);
+      return TRUE;
+    }
+    return FALSE;
+  }
+
+  /**
    * For all enabled modules, add new entities, update
    * existing entities, and remove orphaned (stale) entities.
    */
@@ -164,6 +186,7 @@ class CRM_Core_ManagedEntities {
       $dao->name = $todo['name'];
       $dao->entity_type = $todo['entity_type'];
       $dao->entity_id = $todo['entity_id'];
+      $dao->entity_modified_date = $todo['entity_modified_date'];
       $dao->id = $todo['id'];
       $this->updateExistingEntity($dao, $todo);
     }
@@ -195,7 +218,7 @@ class CRM_Core_ManagedEntities {
   }
 
   /**
-   * Get the managed entities to be created.
+   * Get the managed entities to be updated.
    *
    * @param array $filters
    *
@@ -213,7 +236,8 @@ class CRM_Core_ManagedEntities {
    * @return array
    */
   protected function getManagedEntitiesToDelete(array $filters = []): array {
-    return $this->getManagedEntities(array_merge($filters, ['managed_action' => 'delete']));
+    // Return array in reverse-order so that child entities are cleaned up before their parents
+    return array_reverse($this->getManagedEntities(array_merge($filters, ['managed_action' => 'delete'])));
   }
 
   /**
@@ -287,6 +311,10 @@ class CRM_Core_ManagedEntities {
    *   Entity specification (per hook_civicrm_managedEntities).
    */
   protected function insertNewEntity($todo) {
+    if ($todo['params']['version'] == 4) {
+      $todo['params']['checkPermissions'] = FALSE;
+    }
+
     $result = civicrm_api($todo['entity_type'], 'create', $todo['params']);
     if (!empty($result['is_error'])) {
       $this->onApiError($todo['entity_type'], 'create', $todo['params'], $result);
@@ -311,10 +339,18 @@ class CRM_Core_ManagedEntities {
    *   Entity specification (per hook_civicrm_managedEntities).
    */
   protected function updateExistingEntity($dao, $todo) {
-    $policy = CRM_Utils_Array::value('update', $todo, 'always');
+    $policy = $todo['update'] ?? 'always';
     $doUpdate = ($policy === 'always');
 
-    if ($doUpdate) {
+    if ($policy === 'unmodified') {
+      // If this is not an APIv4 managed entity, the entity_modidfied_date will always be null
+      if (!CRM_Core_BAO_Managed::isApi4ManagedType($dao->entity_type)) {
+        Civi::log()->warning('ManagedEntity update policy "unmodified" specified for entity type ' . $dao->entity_type . ' which is not an APIv4 ManagedEntity. Falling back to policy "always".');
+      }
+      $doUpdate = empty($dao->entity_modified_date);
+    }
+
+    if ($doUpdate && $todo['params']['version'] == 3) {
       $defaults = ['id' => $dao->entity_id];
       if ($this->isActivationSupported($dao->entity_type)) {
         $defaults['is_active'] = 1;
@@ -343,9 +379,16 @@ class CRM_Core_ManagedEntities {
         $this->onApiError($dao->entity_type, 'create', $params, $result);
       }
     }
+    elseif ($doUpdate && $todo['params']['version'] == 4) {
+      $params = ['checkPermissions' => FALSE] + $todo['params'];
+      $params['values']['id'] = $dao->entity_id;
+      civicrm_api4($dao->entity_type, 'update', $params);
+    }
 
-    if (isset($todo['cleanup'])) {
-      $dao->cleanup = $todo['cleanup'];
+    if (isset($todo['cleanup']) || $doUpdate) {
+      $dao->cleanup = $todo['cleanup'] ?? NULL;
+      // Reset the `entity_modified_date` timestamp if reverting record.
+      $dao->entity_modified_date = $doUpdate ? 'null' : NULL;
       $dao->update();
     }
   }
@@ -371,6 +414,9 @@ class CRM_Core_ManagedEntities {
       if ($result['is_error']) {
         $this->onApiError($dao->entity_type, 'create', $params, $result);
       }
+      // Reset the `entity_modified_date` timestamp to indicate that the entity has not been modified by the user.
+      $dao->entity_modified_date = 'null';
+      $dao->update();
     }
   }
 
@@ -392,13 +438,18 @@ class CRM_Core_ManagedEntities {
         break;
 
       case 'unused':
-        $getRefCount = civicrm_api3($dao->entity_type, 'getrefcount', [
-          'debug' => 1,
-          'id' => $dao->entity_id,
-        ]);
+        if (CRM_Core_BAO_Managed::isApi4ManagedType($dao->entity_type)) {
+          $getRefCount = \Civi\Api4\Utils\CoreUtil::getRefCount($dao->entity_type, $dao->entity_id);
+        }
+        else {
+          $getRefCount = civicrm_api3($dao->entity_type, 'getrefcount', [
+            'id' => $dao->entity_id,
+          ])['values'];
+        }
 
+        // FIXME: This extra counting should be unnecessary, because getRefCount only returns values if count > 0
         $total = 0;
-        foreach ($getRefCount['values'] as $refCount) {
+        foreach ($getRefCount as $refCount) {
           $total += $refCount['count'];
         }
 
@@ -409,13 +460,22 @@ class CRM_Core_ManagedEntities {
         throw new CRM_Core_Exception('Unrecognized cleanup policy: ' . $policy);
     }
 
-    if ($doDelete) {
+    // APIv4 delete - deletion from `civicrm_managed` will be taken care of by
+    // CRM_Core_BAO_Managed::on_hook_civicrm_post()
+    if ($doDelete && CRM_Core_BAO_Managed::isApi4ManagedType($dao->entity_type)) {
+      civicrm_api4($dao->entity_type, 'delete', [
+        'checkPermissions' => FALSE,
+        'where' => [['id', '=', $dao->entity_id]],
+      ]);
+    }
+    // APIv3 delete
+    elseif ($doDelete) {
       $params = [
         'version' => 3,
         'id' => $dao->entity_id,
       ];
       $check = civicrm_api3($dao->entity_type, 'get', $params);
-      if ((bool) $check['count']) {
+      if ($check['count']) {
         $result = civicrm_api($dao->entity_type, 'delete', $params);
         if ($result['is_error']) {
           if (isset($dao->name)) {

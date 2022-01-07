@@ -259,6 +259,61 @@ class CRM_Upgrade_Incremental_MessageTemplates {
           ['name' => 'case_activity', 'type' => 'subject'],
         ],
       ],
+      [
+        'version' => '5.44.alpha1',
+        'upgrade_descriptor' => ts('Use domain tokens instead of smarty values'),
+        'label' => ts('Pledge acknowledgement'),
+        'templates' => [
+          ['name' => 'pledge_acknowledge', 'type' => 'text'],
+          ['name' => 'pledge_acknowledge', 'type' => 'html'],
+        ],
+      ],
+      [
+        'version' => '5.44.alpha1',
+        'upgrade_descriptor' => ts('Use domain and contact tokens instead of smarty values'),
+        'label' => ts('Pledge reminder'),
+        'templates' => [
+          ['name' => 'pledge_reminder', 'type' => 'text'],
+          ['name' => 'pledge_reminder', 'type' => 'html'],
+        ],
+      ],
+      [
+        'version' => '5.44.alpha1',
+        'upgrade_descriptor' => ts('Use domain and contact tokens instead of smarty values'),
+        'label' => ts('Participant Transferred'),
+        'templates' => [
+          ['name' => 'participant_transferred', 'type' => 'text'],
+          ['name' => 'participant_transferred', 'type' => 'html'],
+        ],
+      ],
+      [
+        'version' => '5.44.alpha1',
+        'upgrade_descriptor' => ts('Use domain and contact tokens instead of smarty values'),
+        'label' => ts('Participant Cancelled'),
+        'templates' => [
+          ['name' => 'participant_cancelled', 'type' => 'text'],
+          ['name' => 'participant_cancelled', 'type' => 'html'],
+        ],
+      ],
+
+      [
+        'version' => '5.44.alpha1',
+        'upgrade_descriptor' => ts('Use domain and contact tokens instead of smarty values'),
+        'label' => ts('Participant Expired'),
+        'templates' => [
+          ['name' => 'participant_expired', 'type' => 'text'],
+          ['name' => 'participant_expired', 'type' => 'html'],
+        ],
+      ],
+      [
+        'version' => '5.44.alpha1',
+        'upgrade_descriptor' => ts('Use domain and contact tokens instead of smarty values'),
+        'label' => ts('Participant Confirmed'),
+        'templates' => [
+          ['name' => 'participant_confirm', 'type' => 'text'],
+          ['name' => 'participant_confirm', 'type' => 'html'],
+        ],
+      ],
     ];
   }
 

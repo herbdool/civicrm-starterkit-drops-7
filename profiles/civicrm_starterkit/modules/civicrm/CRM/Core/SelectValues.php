@@ -237,10 +237,7 @@ class CRM_Core_SelectValues {
     ];
 
     if (CRM_Core_Config::singleton()->userSystem->supports_form_extensions) {
-      $ufGroupType += [
-        'User Registration' => ts('Drupal User Registration'),
-        'User Account' => ts('View/Edit Drupal User Account'),
-      ];
+      $ufGroupType += CRM_Core_Config::singleton()->userSystem->getUfGroupTypes();
     }
     return $ufGroupType;
   }
@@ -413,7 +410,7 @@ class CRM_Core_SelectValues {
   public static function mapProvider() {
     static $map = NULL;
     if (!$map) {
-      $map = ['' => '- select -'] + CRM_Utils_System::getPluginList('templates/CRM/Contact/Form/Task/Map', ".tpl");
+      $map = ['' => ts('- select -')] + CRM_Utils_System::getPluginList('templates/CRM/Contact/Form/Task/Map', ".tpl");
     }
     return $map;
   }
@@ -427,7 +424,7 @@ class CRM_Core_SelectValues {
   public static function geoProvider() {
     static $geo = NULL;
     if (!$geo) {
-      $geo = ['' => '- select -'] + CRM_Utils_System::getPluginList('CRM/Utils/Geocode');
+      $geo = ['' => ts('- select -')] + CRM_Utils_System::getPluginList('CRM/Utils/Geocode');
     }
     return $geo;
   }
@@ -462,7 +459,7 @@ class CRM_Core_SelectValues {
   public static function addressProvider() {
     static $addr = NULL;
     if (!$addr) {
-      $addr = array_merge(['' => '- select -'], CRM_Utils_System::getPluginList('CRM/Utils/Address', '.php', ['BatchUpdate']));
+      $addr = array_merge(['' => ts('- select -')], CRM_Utils_System::getPluginList('CRM/Utils/Address', '.php', ['BatchUpdate']));
     }
     return $addr;
   }
@@ -900,6 +897,7 @@ class CRM_Core_SelectValues {
     // is for recurring payments and probably not good to re-use for recurring entities.
     // If something other than a hard-coded list is desired, add a new option_group.
     return [
+      'minute' => ts('minute', ['plural' => 'minutes', 'count' => $count]),
       'hour' => ts('hour', ['plural' => 'hours', 'count' => $count]),
       'day' => ts('day', ['plural' => 'days', 'count' => $count]),
       'week' => ts('week', ['plural' => 'weeks', 'count' => $count]),
@@ -1100,6 +1098,16 @@ class CRM_Core_SelectValues {
     return [
       'a_b' => ts('A to B'),
       'b_a' => ts('B to A'),
+    ];
+  }
+
+  /**
+   * @return array
+   */
+  public static function andOr() {
+    return [
+      'AND' => ts('And'),
+      'OR' => ts('Or'),
     ];
   }
 

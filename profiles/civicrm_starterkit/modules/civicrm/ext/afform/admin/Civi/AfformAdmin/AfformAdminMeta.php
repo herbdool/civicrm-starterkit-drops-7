@@ -20,7 +20,7 @@ class AfformAdminMeta {
       ->execute();
     // Pluralize tabs (too bad option groups only store a single label)
     $plurals = [
-      'form' => E::ts('Custom Forms'),
+      'form' => E::ts('Submission Forms'),
       'search' => E::ts('Search Forms'),
       'block' => E::ts('Field Blocks'),
       'system' => E::ts('System Forms'),
@@ -85,7 +85,7 @@ class AfformAdminMeta {
     $meta = [
       'entity' => $info['name'],
       'label' => $info['title'],
-      'icon' => $info['icon'],
+      'icon' => $info['icon'] ?? NULL,
     ];
     // Custom entities are always type 'join'
     if (in_array('CustomValue', $info['type'], TRUE)) {

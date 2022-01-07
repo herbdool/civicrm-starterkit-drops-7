@@ -769,20 +769,7 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
           $existing = array_merge([[]], $result['values']);
         }
         foreach ($contact[$location] as $i => $params) {
-          // Update drupal email address
-          if ($location == 'email' && !empty($params['email']) && $i == 1) {
-            $uid = wf_crm_user_cid($cid, 'contact');
-            if ($uid) {
-              $user = user_load($uid);
-              if ($params['email'] != $user->mail) {
-                // Verify this email is unique before saving it to user
-                $args = [':mail' => $params['email']];
-                if (!(db_query("SELECT count(uid) FROM {users} WHERE mail = :mail", $args)->fetchField())) {
-                  user_save($user, ['mail' => $params['email']]);
-                }
-              }
-            }
-          }
+
           // Check if anything was changed, else skip the update
           if (!empty($existing[$i])) {
             $same = TRUE;
@@ -795,6 +782,7 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
               continue;
             }
           }
+
           if ($location == 'address') {
             // Store shared addresses for later since we haven't necessarily processed
             // the contact this address is shared with yet.
@@ -811,16 +799,21 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
             $params['master_id'] = $params['geo_code_1'] = $params['geo_code_2'] = 'null';
           }
           $params['contact_id'] = $cid;
+
+          // Update existing information of a matching location type
           if (!empty($existing[$i])) {
             $params['id'] = $existing[$i]['id'];
           }
+
+          // Delete this location if nothing was entered and this is a known contact
           if ($this->locationIsEmpty($location, $params)) {
-            // Delete this location if nothing was entered and this is a known contact
             if (!empty($this->existing_contacts[$c]) && !empty($params['id'])) {
               wf_civicrm_api($location, 'delete', $params);
             }
             continue;
           }
+
+          // Handle setting primary status
           if ($location != 'website') {
             if (empty($params['location_type_id'])) {
               $params['location_type_id'] = wf_crm_aval($existing, "$i:location_type_id", 1);
@@ -838,6 +831,22 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
         }
       }
     }
+
+    // Update drupal email address if required, after all other processing
+    if (!empty($contact['email'][1]['email'])) {
+      $uid = wf_crm_user_cid($cid, 'contact');
+      if ($uid) {
+        $user = user_load($uid);
+        if ($contact['email'][1]['email'] != $user->mail) {
+          // Verify this email is unique before saving it to user
+          $args = [':mail' => $contact['email'][1]['email']];
+          if (!(db_query("SELECT count(uid) FROM {users} WHERE mail = :mail", $args)->fetchField())) {
+            user_save($user, ['mail' => $contact['email'][1]['email']]);
+          }
+        }
+      }
+    }
+
   }
 
   /**
@@ -1983,41 +1992,33 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
     $params['webform_redirect_cancel'] = $this->getIpnRedirectUrl('cancel');
     $params['webform_redirect_success'] = $this->getIpnRedirectUrl('success');
 
-    if (method_exists($paymentProcessor, 'doTransferCheckout')) {
-      //Paypal Express checkout
-      if(wf_crm_aval($_POST, 'credit_card_number') == 'express'){
-        try {
-          $params['button'] = 'express';
-          $params['component'] = 'contribute';
-          $result = $paymentProcessor->doPreApproval($params);
-            if (empty($result)) {
-            // This could happen, for example, when paypal looks at the button value & decides it is not paypal express.
-            return;
-          }
-        }
-        catch (\Civi\Payment\Exception\PaymentProcessorException $e) {
-          drupal_set_message(ts('Payment approval failed with message :') . $e->getMessage(),'error');
-          CRM_Utils_System::redirect($this->getIpnRedirectUrl('cancel'));
-        }
-        $preApprovalParams = $paymentProcessor->getPreApprovalDetails($result['pre_approval_parameters']);
-        $params = array_merge($params, $preApprovalParams);
-        if (!empty($result['redirect_url'])) {
-          CRM_Utils_System::redirect($result['redirect_url']);
-        }
-      }
-      // doTransferCheckout is deprecated but some processors might still implement it.
-      // Somewhere around 4.6 it was replaced by doPayment as the method of choice,
-      // but to be safe still call it if it exists for now.
-      $paymentProcessor->doTransferCheckout($params, 'contribute');
-    }
-    else {
+    //Paypal Express checkout
+    if (wf_crm_aval($_POST, 'credit_card_number') == 'express') {
       try {
-        $paymentProcessor->doPayment($params);
+        $params['button'] = 'express';
+        $params['component'] = 'contribute';
+        $result = $paymentProcessor->doPreApproval($params);
+          if (empty($result)) {
+          // This could happen, for example, when paypal looks at the button value & decides it is not paypal express.
+          return;
+        }
       }
       catch (\Civi\Payment\Exception\PaymentProcessorException $e) {
         drupal_set_message(ts('Payment approval failed with message: ') . $e->getMessage(),'error');
         CRM_Utils_System::redirect($this->getIpnRedirectUrl('cancel'));
       }
+      $preApprovalParams = $paymentProcessor->getPreApprovalDetails($result['pre_approval_parameters']);
+      $params = array_merge($params, $preApprovalParams);
+      if (!empty($result['redirect_url'])) {
+        CRM_Utils_System::redirect($result['redirect_url']);
+      }
+    }
+    try {
+      $paymentProcessor->doPayment($params);
+    }
+    catch (\Civi\Payment\Exception\PaymentProcessorException $e) {
+      drupal_set_message(ts('Payment approval failed with message: ') . $e->getMessage(),'error');
+      CRM_Utils_System::redirect($this->getIpnRedirectUrl('cancel'));
     }
 
   }
@@ -2182,8 +2183,10 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
       if (empty($item['contribution_id'])) {
         $item['contribution_id'] = $id;
       }
+      $priceSetId = 'default_contribution_amount';
       // Membership
       if (!empty($item['membership_id'])) {
+        $priceSetId = 'default_membership_type_amount';
         $item['entity_id'] = $item['membership_id'];
         $lineItemArray = wf_civicrm_api('LineItem', 'get', [
           'entity_table' => "civicrm_membership",
@@ -2201,6 +2204,11 @@ class wf_crm_webform_postprocess extends wf_crm_webform_base {
           }
         }
       }
+      $item['price_field_id'] = wf_civicrm_api('PriceField', 'get', [
+        'sequential' => 1,
+        'price_set_id' => $priceSetId,
+        'options' => ['limit' => 1],
+      ])['id'] ?? NULL;
 
       // Save the line_item
       $line_result = wf_civicrm_api('line_item', 'create', $item);
