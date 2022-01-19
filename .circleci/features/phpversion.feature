@@ -7,4 +7,8 @@ Feature: Check php version
   Scenario: Check the php version in the phpinfo output
     Given I am logged in as a user with the "administrator" role
     And I am on "/admin/reports/status/php"
+<<<<<<< HEAD
     Then I should see "PHP Version 5.6."
+=======
+    Then I should see "PHP Version 7.4."
+>>>>>>> drops-7/update-7.86

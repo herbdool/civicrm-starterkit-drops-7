@@ -320,7 +320,7 @@ function civicrm_starterkit_install() {
     'required' => FALSE,
 
     'settings' => array(
-      'file_directory' => 'field/image',
+      'file_directory' => '[date:custom:Y]-[date:custom:m]',
       'file_extensions' => 'png gif jpg jpeg',
       'max_filesize' => '',
       'max_resolution' => '',

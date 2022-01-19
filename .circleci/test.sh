@@ -14,6 +14,16 @@ if [ -z "$TERMINUS_SITE" ] || [ -z "$TERMINUS_ENV" ]; then
 	exit 1
 fi
 
+<<<<<<< HEAD
+=======
+# Check for rejection file and exit if one exists
+REJ_FILES=(`find . -type f -name '*.rej'`)
+if [ ${#REJ_FILES[@]} -gt 0 ]; then
+	echo "Merge conflict detected"
+	exit 1
+fi
+
+>>>>>>> drops-7/update-7.86
 PATH=$PATH:~/.composer/vendor/bin
 
 # Create a drush alias file so that Behat tests can be executed against Pantheon.
