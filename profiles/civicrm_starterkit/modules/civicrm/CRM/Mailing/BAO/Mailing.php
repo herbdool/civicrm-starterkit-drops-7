@@ -51,13 +51,13 @@ class CRM_Mailing_BAO_Mailing extends CRM_Mailing_DAO_Mailing {
 
   /**
    * The header associated with this mailing.
-   * @var string
+   * @var CRM_Mailing_BAO_MailingComponent
    */
   private $header = NULL;
 
   /**
    * The footer associated with this mailing.
-   * @var string
+   * @var CRM_Mailing_BAO_MailingComponent
    */
   private $footer = NULL;
 
@@ -78,13 +78,6 @@ class CRM_Mailing_BAO_Mailing extends CRM_Mailing_DAO_Mailing {
    * @var int
    */
   private $_domain = NULL;
-
-  /**
-   * Class constructor.
-   */
-  public function __construct() {
-    parent::__construct();
-  }
 
   /**
    * @deprecated
@@ -995,7 +988,7 @@ ORDER BY   civicrm_email.is_bulkmail DESC
    * @param bool $isForward
    *   Is this mailing compose for forward?.
    * @param string $fromEmail
-   *   Email address of who is forwardinf it.
+   *   Email address of who is forwarding it.
    *
    * @param null $replyToEmail
    *
@@ -2289,7 +2282,7 @@ LEFT JOIN civicrm_mailing_group g ON g.mailing_id   = m.id
    * @param int $offset
    *   The row number to start from.
    * @param int $rowCount
-   *   The nmber of rows to return.
+   *   The number of rows to return.
    * @param string $sort
    *   The sql string that describes the sort order.
    *
@@ -2691,7 +2684,8 @@ WHERE  civicrm_mailing_job.id = %1
   }
 
   /**
-   * @param null $mode
+   * @param string|null $mode
+   *   Either 'sms' or null
    *
    * @return bool
    * @throws Exception

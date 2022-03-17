@@ -33,7 +33,7 @@
     $scope.availableParams = {};
     params = $scope.params = {};
     $scope.index = '';
-    $scope.selectedTab = {result: 'result', code: 'php'};
+    $scope.selectedTab = {result: 'result'};
     $scope.perm = {
       accessDebugOutput: CRM.checkPerm('access debug output'),
       editGroups: CRM.checkPerm('edit groups')
@@ -75,7 +75,6 @@
         {name: 'pipe', label: ts('CV (pipe)'), code: ''}
       ]
     };
-    this.resultFormat = 'json';
     this.resultFormats = [
       {
         name: 'json',
@@ -91,10 +90,23 @@
       formatForSelect2(schema, entities, 'name', ['description', 'icon']);
     }
 
+    // Prefix other url args with an underscore to avoid conflicts with param names
     $scope.$bindToRoute({
       expr: 'index',
-      param: 'index',
+      param: '_index',
       default: ''
+    });
+    $scope.$bindToRoute({
+      expr: 'selectedTab.code',
+      param: '_lang',
+      format: 'raw',
+      default: 'php'
+    });
+    $scope.$bindToRoute({
+      expr: '$ctrl.resultFormat',
+      param: '_format',
+      format: 'raw',
+      default: 'json'
     });
 
     function ucfirst(str) {
@@ -777,6 +789,7 @@
     // Format oop params
     function formatOOP(entity, action, params, indent) {
       var info = getEntity(entity),
+        arrayParams = ['groupBy', 'records'],
         newLine = "\n" + _.repeat(' ', indent),
         code = '\\' + info.class + '::' + action + '(',
         perm = params.checkPermissions === false ? 'FALSE' : '';
@@ -791,6 +804,10 @@
           _.each(param, function(item, index) {
             val = phpFormat(index) + ', ' + phpFormat(item, 2 + indent);
             code += newLine + "->add" + ucfirst(key).replace(/s$/, '') + '(' + val + ')';
+          });
+        } else if (_.includes(arrayParams, key)) {
+          _.each(param, function(item) {
+            code += newLine + "->add" + ucfirst(key).replace(/s$/, '') + '(' + phpFormat(item, 2 + indent) + ')';
           });
         } else if (key === 'where') {
           _.each(param, function (clause) {
@@ -879,6 +896,9 @@
     };
 
     ctrl.formatResult = function() {
+      if (!response) {
+        return;
+      }
       $scope.result = [formatMeta(response.meta)];
       switch (ctrl.resultFormat) {
         case 'json':

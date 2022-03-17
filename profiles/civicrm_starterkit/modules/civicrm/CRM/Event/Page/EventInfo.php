@@ -16,7 +16,7 @@
  */
 
 /**
- * Event Info Page - Summmary about the event
+ * Event Info Page - Summary about the event
  */
 class CRM_Event_Page_EventInfo extends CRM_Core_Page {
 
@@ -78,6 +78,11 @@ class CRM_Event_Page_EventInfo extends CRM_Core_Page {
     $values['event']['event_type'] = CRM_Utils_Array::value($values['event']['event_type_id'], CRM_Event_PseudoConstant::eventType());
 
     $this->assign('isShowLocation', CRM_Utils_Array::value('is_show_location', $values['event']));
+
+    // Reset event time zone info
+    CRM_Event_BAO_Event::setOutputTimeZone($values['event'], $values['event']['event_tz']);
+
+    $values['event']['event_tz'] = CRM_Core_SelectValues::timezone()[$values['event']['event_tz']];
 
     // show event fees.
     if ($this->_id && !empty($values['event']['is_monetary'])) {
@@ -145,6 +150,7 @@ class CRM_Event_Page_EventInfo extends CRM_Core_Page {
               }
               else {
                 $values['feeBlock']['value'][$fieldCnt] = $optionVal['amount'];
+                $values['feeBlock']['tax_amount'][$fieldCnt] = 0;
               }
               $values['feeBlock']['label'][$fieldCnt] = $optionVal['label'];
               $values['feeBlock']['lClass'][$fieldCnt] = $labelClass;

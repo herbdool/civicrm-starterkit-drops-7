@@ -36,7 +36,53 @@ Civi::dispatcher()->addListener('civi.invoke.auth', function($e) {
       _authx_redact(['_authx']);
     }
   }
+
+  // Accept legacy auth (?key=...&api_key=...) for 'civicrm/ajax/rest' and 'civicrm/ajax/api4/*'.
+  // The use of `?key=` could clash on some endpoints. Only accept on a small list of endpoints that are compatible with it.
+  if (count($e->args) > 2 && $e->args[1] === 'ajax' && in_array($e->args[2], ['rest', 'api4'])) {
+    if ((!empty($_REQUEST['api_key']) || !empty($_REQUEST['key']))) {
+      return (new \Civi\Authx\LegacyRestAuthenticator())->auth($e, ['flow' => 'legacyrest', 'cred' => 'Bearer ' . $_REQUEST['api_key'] ?? '', 'siteKey' => $_REQUEST['key'] ?? NULL]);
+    }
+  }
 });
+
+/**
+ * Perform a system login.
+ *
+ * This is useful for backend scripts that need to switch to a specific user.
+ *
+ * As needed, this will update the Civi session and CMS data.
+ *
+ * @param array{flow: ?string, useSession: ?bool, principal: ?array, cred: ?string,} $details
+ *   Describe the authentication process with these properties:
+ *
+ *   - string $flow (default 'script');
+ *     The type of authentication flow being used
+ *     Ex: 'param', 'header', 'auto'
+ *   - bool $useSession (default FALSE)
+ *     If TRUE, then the authentication should be persistent (in a session variable).
+ *     If FALSE, then the authentication should be ephemeral (single page-request).
+ *
+ *   And then ONE of these properties to describe the user/principal:
+ *
+ *   - string $cred
+ *     The credential, as formatted in the 'Authorization' header.
+ *     Ex: 'Bearer 12345', 'Basic ASDFFDSA=='
+ *   - array $principal
+ *     Description of a validated principal.
+ *     Must include 'contactId', 'userId', xor 'user'
+ * @return array{contactId: int, userId: ?int, flow: string, credType: string, useSession: bool}
+ *   An array describing the authenticated session.
+ * @throws \Civi\Authx\AuthxException
+ */
+function authx_login(array $details): array {
+  $defaults = ['flow' => 'script', 'useSession' => FALSE];
+  $details = array_merge($defaults, $details);
+  $auth = new \Civi\Authx\Authenticator();
+  $auth->setRejectMode('exception');
+  $auth->auth(NULL, array_merge($defaults, $details));
+  return \CRM_Core_Session::singleton()->get("authx");
+}
 
 /**
  * @return \Civi\Authx\AuthxInterface

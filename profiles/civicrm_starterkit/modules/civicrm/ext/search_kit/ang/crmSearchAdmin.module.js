@@ -13,7 +13,7 @@
       $routeProvider.when('/list', {
         controller: 'searchList',
         reloadOnSearch: false,
-        templateUrl: '~/crmSearchAdmin/searchListing/crmSearchAdminSearchListing.html',
+        templateUrl: '~/crmSearchAdmin/searchListing/searchList.html',
       });
       $routeProvider.when('/create/:entity', {
         controller: 'searchCreate',
@@ -45,7 +45,7 @@
     })
 
     // Controller for tabbed view of SavedSearches
-    .controller('searchList', function($scope, searchMeta, formatForSelect2) {
+    .controller('searchList', function($scope, $timeout, searchMeta, formatForSelect2, dialogService) {
       var ts = $scope.ts = CRM.ts('org.civicrm.search_kit'),
         ctrl = $scope.$ctrl = this;
       searchEntity = 'SavedSearch';
@@ -168,7 +168,7 @@
         }
         // Might be a pseudoField
         if (!field) {
-          field = _.cloneDeep(_.find(CRM.crmSearchAdmin.pseudoFields, {name: name}));
+          field = _.find(CRM.crmSearchAdmin.pseudoFields, {name: name});
         }
         if (field) {
           field.baseEntity = entityName;
@@ -310,7 +310,7 @@
           values = _.merge({
             type: 'field',
             key: info.alias,
-            dataType: (info.fn && info.fn.dataType) || field.data_type
+            dataType: (info.fn && info.fn.data_type) || field.data_type
           }, defaults);
         if (defaults.label === true) {
           values.label = getDefaultLabel(fieldExpr);

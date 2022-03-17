@@ -17,13 +17,6 @@
 class CRM_Core_BAO_Mapping extends CRM_Core_DAO_Mapping implements \Civi\Test\HookInterface {
 
   /**
-   * Class constructor.
-   */
-  public function __construct() {
-    parent::__construct();
-  }
-
-  /**
    * Fetch object based on array of properties.
    *
    * @param array $params
@@ -649,6 +642,11 @@ class CRM_Core_BAO_Mapping extends CRM_Core_DAO_Mapping implements \Civi\Test\Ho
             $relationships
           );
         }
+        if (!empty($fields[$contactType]['state_province']) && empty($fields[$contactType]['state_province_name'])) {
+          $fields[$contactType]['state_province_name'] = $fields[$contactType]['state_province'];
+          $fields[$contactType]['state_province_name']['title'] = ts('State/Province Name');
+          $fields[$contactType]['state_province']['title'] = ts('State/Province Abbreviation');
+        }
       }
     }
 
@@ -762,7 +760,7 @@ class CRM_Core_BAO_Mapping extends CRM_Core_DAO_Mapping implements \Civi\Test\Ho
       }
     }
     if (($mappingType == 'Search Builder') || ($exportMode == CRM_Export_Form_Select::GRANT_EXPORT)) {
-      if (CRM_Core_Permission::access('CiviGrant')) {
+      if (method_exists('CRM_Grant_BAO_Grant', 'exportableFields') && CRM_Core_Permission::check('access CiviGrant')) {
         $fields['Grant'] = CRM_Grant_BAO_Grant::exportableFields();
         unset($fields['Grant']['grant_contact_id']);
         if ($mappingType == 'Search Builder') {
@@ -1009,11 +1007,11 @@ class CRM_Core_BAO_Mapping extends CRM_Core_DAO_Mapping implements \Civi\Test\Ho
       return $fields;
     }
 
-    $types = ['Individual', 'Organization', 'Household'];
+    $types = CRM_Contact_BAO_ContactType::basicTypes(TRUE);
     foreach ($params['mapper'] as $key => $value) {
       $contactType = NULL;
       foreach ($value as $k => $v) {
-        if (in_array($v[0], $types)) {
+        if (in_array($v[0], $types, TRUE)) {
           if ($contactType && $contactType != $v[0]) {
             throw new CRM_Core_Exception(ts("Cannot have two clauses with different types: %1, %2",
               [1 => $contactType, 2 => $v[0]]

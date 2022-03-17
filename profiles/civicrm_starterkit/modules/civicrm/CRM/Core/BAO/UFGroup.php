@@ -253,7 +253,7 @@ class CRM_Core_BAO_UFGroup extends CRM_Core_DAO_UFGroup {
    *   What action are we doing.
    * @param int $visibility
    *   Visibility of fields we are interested in.
-   * @param $searchable
+   * @param bool $searchable
    * @param bool $showAll
    * @param string $restrict
    *   Should we restrict based on a specified profile type.
@@ -261,10 +261,8 @@ class CRM_Core_BAO_UFGroup extends CRM_Core_DAO_UFGroup {
    * @param null $ctype
    * @param int $permissionType
    * @param string $orderBy
-   * @param null $orderProfiles
-   *
+   * @param bool $orderProfiles
    * @param bool $eventProfile
-   *
    * @return array
    *   The fields that belong to this ufgroup(s)
    *
@@ -275,14 +273,14 @@ class CRM_Core_BAO_UFGroup extends CRM_Core_DAO_UFGroup {
     $register = FALSE,
     $action = NULL,
     $visibility = NULL,
-    $searchable = NULL,
+    $searchable = FALSE,
     $showAll = FALSE,
     $restrict = NULL,
     $skipPermission = FALSE,
     $ctype = NULL,
     $permissionType = CRM_Core_Permission::CREATE,
     $orderBy = 'field_name',
-    $orderProfiles = NULL,
+    $orderProfiles = FALSE,
     $eventProfile = FALSE
   ) {
     if (!is_array($id)) {
@@ -1604,7 +1602,7 @@ AND    ( entity_id IS NULL OR entity_id <= 0 )
    * @param array $params
    *   (reference) an assoc array of name/value pairs.
    *
-   * @return CRM_Core_BAO_UFJoin
+   * @return CRM_Core_DAO_UFJoin
    */
   public static function addUFJoin(&$params) {
     $ufJoin = new CRM_Core_DAO_UFJoin();
@@ -1665,7 +1663,7 @@ AND    ( entity_id IS NULL OR entity_id <= 0 )
    * @param bool $skipPermission
    * @param int $op
    *   Which operation (view, edit, create, etc) to check permission for.
-   * @param array|NULL $returnFields list of UFGroup fields to return; NULL for default
+   * @param array|null $returnFields
    *
    * @return array
    *   array of ufgroups for a module
@@ -2093,7 +2091,7 @@ AND    ( entity_id IS NULL OR entity_id <= 0 )
       );
     }
     elseif ($fieldName === 'contribution_status_id') {
-      $contributionStatuses = CRM_Contribute_BAO_Contribution_Utils::getContributionStatuses();
+      $contributionStatuses = CRM_Contribute_BAO_Contribution_Utils::getPendingCompleteFailedAndCancelledStatuses();
 
       $form->add('select', $name, $title,
         $contributionStatuses, $required, ['placeholder' => TRUE]
@@ -2179,7 +2177,7 @@ AND    ( entity_id IS NULL OR entity_id <= 0 )
       }
     }
     elseif ($fieldName == 'activity_details') {
-      $form->add('wysiwyg', $fieldName, $title, ['rows' => 4, 'cols' => 60], $required);
+      $form->add('wysiwyg', $name, $title, ['rows' => 4, 'cols' => 60], $required);
     }
     elseif ($fieldName == 'activity_duration') {
       $form->add('text', $name, $title, $attributes, $required);
@@ -3081,7 +3079,7 @@ AND    ( entity_id IS NULL OR entity_id <= 0 )
   }
 
   /**
-   * setDefault componet specific profile fields.
+   * setDefault component specific profile fields.
    *
    * @param array $fields
    *   Profile fields.
@@ -3340,8 +3338,7 @@ SELECT  group_id
   public static function checkForMixProfiles($profileIds) {
     $mixProfile = FALSE;
 
-    $contactTypes = ['Individual', 'Household', 'Organization'];
-    $subTypes = CRM_Contact_BAO_ContactType::subTypes();
+    $contactTypes = CRM_Contact_BAO_ContactType::basicTypes(TRUE);
 
     $components = ['Contribution', 'Participant', 'Membership', 'Activity'];
 
@@ -3352,7 +3349,7 @@ SELECT  group_id
       if ($profileType == 'Contact') {
         continue;
       }
-      if (in_array($profileType, $contactTypes)) {
+      if (in_array($profileType, $contactTypes, TRUE)) {
         if (!isset($typeCount['ctype'][$profileType])) {
           $typeCount['ctype'][$profileType] = 1;
         }
@@ -3363,7 +3360,7 @@ SELECT  group_id
           break;
         }
       }
-      elseif (in_array($profileType, $components)) {
+      elseif (in_array($profileType, $components, TRUE)) {
         $mixProfile = TRUE;
         break;
       }
@@ -3458,8 +3455,7 @@ SELECT  group_id
    */
   public static function isProfileDoubleOptin() {
     // check for double optin
-    $config = CRM_Core_Config::singleton();
-    if (in_array('CiviMail', $config->enableComponents)) {
+    if (CRM_Core_Component::isEnabled('CiviMail')) {
       return Civi::settings()->get('profile_double_optin');
     }
     return FALSE;
@@ -3470,8 +3466,7 @@ SELECT  group_id
    */
   public static function isProfileAddToGroupDoubleOptin() {
     // check for add to group double optin
-    $config = CRM_Core_Config::singleton();
-    if (in_array('CiviMail', $config->enableComponents)) {
+    if (CRM_Core_Component::isEnabled('CiviMail')) {
       return Civi::settings()->get('profile_add_to_group_double_optin');
     }
     return FALSE;

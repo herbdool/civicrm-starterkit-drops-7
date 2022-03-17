@@ -15,13 +15,7 @@
  * @copyright CiviCRM LLC https://civicrm.org/licensing
  */
 class CRM_Event_BAO_Event extends CRM_Event_DAO_Event {
-
-  /**
-   * Class constructor.
-   */
-  public function __construct() {
-    parent::__construct();
-  }
+  const tz_fields = ['event_start_date', 'event_end_date', 'start_date', 'end_date', 'registration_start_date', 'registration_end_date'];
 
   /**
    * Fetch object based on array of properties.
@@ -31,7 +25,7 @@ class CRM_Event_BAO_Event extends CRM_Event_DAO_Event {
    * @param array $defaults
    *   (reference ) an assoc array to hold the flattened values.
    *
-   * @return CRM_Event_DAO_Event
+   * @return CRM_Event_DAO_Event|null
    */
   public static function retrieve(&$params, &$defaults) {
     $event = new CRM_Event_DAO_Event();
@@ -650,13 +644,12 @@ $event_summary_limit
   }
 
   /**
-   * Get the information to map a event.
+   * Get the information to map an event.
    *
    * @param int $id
    *   For which we want map info.
    *
-   * @return null|string
-   *   title of the event
+   * @return array
    */
   public static function &getMapInfo(&$id) {
 
@@ -787,6 +780,7 @@ SELECT
   civicrm_email.email as email,
   civicrm_event.title as title,
   civicrm_event.summary as summary,
+  civicrm_event.event_tz as event_tz,
   civicrm_event.start_date as start,
   civicrm_event.end_date as end,
   civicrm_event.description as description,
@@ -858,6 +852,7 @@ WHERE civicrm_event.is_active = 1
         $info['event_id'] = $dao->event_id;
         $info['summary'] = $dao->summary;
         $info['description'] = $dao->description;
+        $info['tz'] = $dao->event_tz ?? CRM_Core_Config::singleton()->userSystem->getTimeZoneString();
         $info['start_date'] = $dao->start;
         $info['end_date'] = $dao->end;
         $info['contact_email'] = $dao->email;
@@ -1261,7 +1256,7 @@ WHERE civicrm_event.is_active = 1
    * @param int $id
    * @param string $name
    * @param int $cid
-   * @param string $template
+   * @param \CRM_Core_Smarty $template
    * @param int $participantId
    * @param bool $isTest
    * @param bool $returnResults
@@ -1663,7 +1658,7 @@ WHERE  id = $cfID
                   }
                 }
                 elseif ($dao->data_type == 'Float') {
-                  $customVal = (float ) ($params[$name]);
+                  $customVal = (float) ($params[$name]);
                 }
                 elseif ($dao->data_type == 'Date') {
                   //@todo note the currently we are using default date time formatting. Since you can select/set
@@ -2233,7 +2228,7 @@ WHERE  ce.loc_block_id = $locBlockId";
    *
    * @param int $eventId
    *   Event id.
-   * @param sting $extraWhereClause
+   * @param string $extraWhereClause
    *   Extra filter on participants.
    *
    * @return int
@@ -2361,11 +2356,12 @@ LEFT  JOIN  civicrm_price_field_value value ON ( value.id = lineItem.price_field
     // Special logic for fields whose options depend on context or properties
     switch ($fieldName) {
       case 'financial_type_id':
-        // @fixme - this is going to ignore context, better to get conditions, add params, and call PseudoConstant::get
-        // @fixme - https://lab.civicrm.org/dev/core/issues/547 if CiviContribute not enabled this causes an invalid query
-        //   because $relationTypeId is not set in CRM_Financial_BAO_FinancialType::getIncomeFinancialType()
-        if (array_key_exists('CiviContribute', CRM_Core_Component::getEnabledComponents())) {
-          return CRM_Financial_BAO_FinancialType::getIncomeFinancialType();
+        // https://lab.civicrm.org/dev/core/issues/547 if CiviContribute not enabled this causes an invalid query
+        // @todo - the component is enabled check should be done within getIncomeFinancialType
+        // It looks to me like test cover was NOT added to cover the change
+        // that added this so we need to assume there is no test cover
+        if (CRM_Core_Component::isEnabled('CiviContribute')) {
+          return CRM_Financial_BAO_FinancialType::getIncomeFinancialType($props['check_permissions'] ?? TRUE);
         }
         return [];
     }
@@ -2439,6 +2435,54 @@ LEFT  JOIN  civicrm_price_field_value value ON ( value.id = lineItem.price_field
       'icon' => 'fa-link',
     ];
     return $return;
+  }
+
+  /**
+   * Changes timezone-enabled fields to the correct zone for output and add local
+   * & UTC variants
+   *
+   * @param array $params
+   * @param $to_tz
+   *
+   * @return void
+   */
+  public static function setOutputTimeZone(array &$params, $to_tz = NULL) {
+    $to_tz = $to_tz ?? ($params['event_tz'] ?? NULL);
+
+    if (is_null($to_tz)) {
+      return;
+    }
+
+    foreach (CRM_Event_BAO_Event::tz_fields as $field) {
+      if (!empty($params[$field]) && empty($params[$field . '_local'])) {
+        $params[$field . '_utc'] = CRM_Utils_Date::convertTimeZone($params[$field], 'UTC');
+        $params[$field . '_local'] = $params[$field];
+        $params[$field] = CRM_Utils_Date::convertTimeZone($params[$field], $to_tz);
+      }
+    }
+
+  }
+
+  public static function setTimezones(CRM_Event_DAO_Event $event) {
+    // Pre-process time zoned fields into the PHP time zone, which should be the same as the database, to save as timestamp.
+    $timezone_event = ($event->event_tz ?: (!empty($event->id) ? CRM_Core_DAO::getFieldValue('CRM_Event_DAO_Event', $event->id, 'event_tz') : NULL));
+
+    foreach (self::tz_fields as $field) {
+      if (!empty($event->{$field})) {
+        $event->{$field} = CRM_Utils_Date::convertTimeZone($event->{$field}, NULL, $timezone_event);
+      }
+    }
+  }
+
+  public static function resetTimezones(CRM_Event_DAO_Event $event) {
+    // Process time zoned fields into their own time zone
+    $timezone_event = ($event->event_tz ?: (!empty($event->id) ? CRM_Core_DAO::getFieldValue('CRM_Event_DAO_Event', $event->id, 'event_tz') : NULL));
+
+    foreach (self::tz_fields as $field) {
+      if (!empty($event->{$field})) {
+        $event->{$field} = CRM_Utils_Date::convertTimeZone($event->{$field}, $timezone_event);
+      }
+    }
   }
 
 }

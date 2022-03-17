@@ -252,7 +252,7 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
    * FIXME: This is not a legacy function and the above is not a safe assumption.
    * External urls are allowed by CRM_Core_Resources and this needs to return the correct value.
    *
-   * @param $url
+   * @param string $url
    *
    * @return bool
    */
@@ -356,7 +356,8 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
    * @return int|null
    */
   public function getUfId($username) {
-    if ($id = user_load_by_name($username)->id()) {
+    $user = user_load_by_name($username);
+    if ($user && $id = $user->id()) {
       return $id;
     }
   }
@@ -552,9 +553,8 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
 
     $module_data = \Drupal::service('extension.list.module')->reset()->getList();
     foreach ($module_data as $module_name => $extension) {
-      if (!isset($extension->info['hidden']) && $extension->origin != 'core') {
-        $extension->schema_version = drupal_get_installed_schema_version($module_name);
-        $modules[] = new CRM_Core_Module('drupal.' . $module_name, ($extension->status == 1));
+      if (!isset($extension->info['hidden']) && $extension->origin != 'core' && $extension->status == 1) {
+        $modules[] = new CRM_Core_Module('drupal.' . $module_name, TRUE);
       }
     }
     return $modules;
@@ -881,6 +881,13 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
     if (class_exists('\Drupal') && \Drupal::hasContainer()) {
       \Drupal::service('router.builder')->rebuild();
     }
+  }
+
+  public function getVersion() {
+    if (class_exists('\Drupal')) {
+      return \Drupal::VERSION;
+    }
+    return 'Unknown';
   }
 
 }

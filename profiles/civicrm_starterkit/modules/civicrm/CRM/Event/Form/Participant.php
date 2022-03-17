@@ -786,7 +786,7 @@ class CRM_Event_Form_Participant extends CRM_Contribute_Form_AbstractEditPayment
    * @param array $values
    *   Posted values of the form.
    * @param $files
-   * @param $self
+   * @param self $self
    *
    * @return array
    *   list of errors to be posted back to the form
@@ -1544,8 +1544,6 @@ class CRM_Event_Form_Participant extends CRM_Contribute_Form_AbstractEditPayment
         $contributionId = CRM_Core_DAO::getFieldValue('CRM_Event_DAO_ParticipantPayment',
           $this->_id, 'contribution_id', 'participant_id'
         );
-        $prefixValue = Civi::settings()->get('contribution_invoice_settings');
-        $invoicing = $prefixValue['invoicing'] ?? NULL;
         if (Civi::settings()->get('invoice_is_email_pdf')) {
           $sendTemplateParams['isEmailPdf'] = TRUE;
           $sendTemplateParams['contributionId'] = $contributionId;
@@ -1733,7 +1731,7 @@ class CRM_Event_Form_Participant extends CRM_Contribute_Form_AbstractEditPayment
         }
 
         $form->add('select', 'contribution_status_id',
-          ts('Payment Status'), CRM_Contribute_BAO_Contribution_Utils::getContributionStatuses('participant')
+          ts('Payment Status'), CRM_Contribute_BAO_Contribution_Utils::getPendingAndCompleteStatuses()
         );
 
         $form->add('text', 'check_number', ts('Check Number'),
@@ -1894,13 +1892,15 @@ class CRM_Event_Form_Participant extends CRM_Contribute_Form_AbstractEditPayment
   protected function assignEventDetailsToTpl($eventID, $participantRoles, $receiptText, $isPaidEvent) {
     //use of the message template below requires variables in different format
     $events = [];
-    $returnProperties = ['event_type_id', 'fee_label', 'start_date', 'end_date', 'is_show_location', 'title'];
+    $returnProperties = ['event_type_id', 'fee_label', 'start_date', 'end_date', 'event_tz', 'is_show_location', 'title'];
 
     //get all event details.
     CRM_Core_DAO::commonRetrieveAll('CRM_Event_DAO_Event', 'id', $eventID, $events, $returnProperties);
     $event = $events[$eventID];
     unset($event['start_date']);
     unset($event['end_date']);
+
+    CRM_Event_BAO_Event::setOutputTimeZone($event);
 
     $role = CRM_Event_PseudoConstant::participantRole();
 
@@ -2181,7 +2181,7 @@ class CRM_Event_Form_Participant extends CRM_Contribute_Form_AbstractEditPayment
   }
 
   /**
-   * Store the parameters to create a payment, if approprite, on the form.
+   * Store the parameters to create a payment, if appropriate, on the form.
    *
    * @param array $params
    *   Params as submitted.

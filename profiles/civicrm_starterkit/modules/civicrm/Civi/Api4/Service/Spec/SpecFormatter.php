@@ -37,6 +37,7 @@ class SpecFormatter {
         $field->setTableName($data['custom_group_id.table_name']);
       }
       $field->setColumnName($data['column_name']);
+      $field->setNullable(empty($data['is_required']));
       $field->setCustomFieldId($data['id'] ?? NULL);
       $field->setCustomGroupName($data['custom_group_id.name']);
       $field->setTitle($data['label']);
@@ -58,7 +59,8 @@ class SpecFormatter {
       $field = new FieldSpec($name, $entity, $dataTypeName);
       $field->setType('Field');
       $field->setColumnName($name);
-      $field->setRequired(!empty($data['required']));
+      $field->setNullable(empty($data['required']));
+      $field->setRequired(!empty($data['required']) && empty($data['default']));
       $field->setTitle($data['title'] ?? NULL);
       $field->setLabel($data['html']['label'] ?? NULL);
       if (!empty($data['pseudoconstant'])) {
@@ -275,8 +277,8 @@ class SpecFormatter {
     if ($inputType == 'Date' && !empty($data['custom_group_id'])) {
       $inputAttrs['time'] = empty($data['time_format']) ? FALSE : ($data['time_format'] == 1 ? 12 : 24);
       $inputAttrs['date'] = $data['date_format'];
-      $inputAttrs['start_date_years'] = (int) $data['start_date_years'];
-      $inputAttrs['end_date_years'] = (int) $data['end_date_years'];
+      $inputAttrs['start_date_years'] = isset($data['start_date_years']) ? (int) $data['start_date_years'] : NULL;
+      $inputAttrs['end_date_years'] = isset($data['end_date_years']) ? (int) $data['end_date_years'] : NULL;
     }
     if ($inputType == 'Text' && !empty($data['maxlength'])) {
       $inputAttrs['maxlength'] = (int) $data['maxlength'];

@@ -8,16 +8,16 @@
 ; upgrade extensions (sometimes core extensions are also included):
 ; terminus drush site:env cvapi Extension.upgrade
 
-core = 7.82
+core = 7.89
 api = 2
 
 ; Drupal Core
-projects[drupal][version] = "7.82"
+projects[drupal][version] = "7.89"
 
 ; ====== CIVICRM RELATED =========
 
 libraries[civicrm][download][type] = get
-libraries[civicrm][download][url] = "https://download.civicrm.org/civicrm-5.45.1-drupal.tar.gz"
+libraries[civicrm][download][url] = "https://download.civicrm.org/civicrm-5.47.2-drupal.tar.gz"
 libraries[civicrm][destination] = modules
 libraries[civicrm][directory_name] = civicrm
 
@@ -50,7 +50,11 @@ libraries[civicrm][patch][smtpverify] = ./patches/smtp-disable-peer-verification
 projects[captcha][subdir] = "contrib"
 projects[recaptcha][subdir] = "contrib"
 projects[civicrm_clear_all_caches][subdir] = "contrib"
+projects[civicrm_clear_all_caches][download][type] = get
+projects[civicrm_clear_all_caches][download][url] = "https://ftp.drupal.org/files/projects/civicrm_clear_all_caches-7.x-1.0-beta2.zip"
 projects[civicrm_cron][subdir] = "contrib"
+projects[civicrm_cron][download][type] = get
+projects[civicrm_cron][download][url] = "https://ftp.drupal.org/files/projects/civicrm_cron-7.x-2.0-beta2.zip"
 projects[ctools][subdir] = "contrib"
 projects[features][subdir] = "contrib"
 projects[libraries][subdir] = "contrib"
@@ -64,7 +68,7 @@ projects[wysiwyg][subdir] = "contrib"
 ; === Libraries ===
 
 libraries[ckeditor][download][type] = get
-libraries[ckeditor][download][url] = "https://download.cksource.com/CKEditor/CKEditor/CKEditor%204.17.1/ckeditor_4.17.1_standard.zip"
+libraries[ckeditor][download][url] = "https://download.cksource.com/CKEditor/CKEditor/CKEditor%204.18.0/ckeditor_4.18.0_standard.zip"
 libraries[ckeditor][destination] = libraries
 libraries[ckeditor][directory_name] = ckeditor
 

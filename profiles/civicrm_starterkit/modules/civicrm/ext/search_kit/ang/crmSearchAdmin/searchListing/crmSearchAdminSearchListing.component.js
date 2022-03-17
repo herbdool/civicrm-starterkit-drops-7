@@ -8,7 +8,7 @@
       tabCount: '='
     },
     templateUrl: '~/crmSearchDisplayTable/crmSearchDisplayTable.html',
-    controller: function($scope, $q, crmApi4, crmStatus, searchMeta, searchDisplayBaseTrait, searchDisplaySortableTrait) {
+    controller: function($scope, $element, $q, crmApi4, crmStatus, searchMeta, searchDisplayBaseTrait, searchDisplaySortableTrait) {
       var ts = $scope.ts = CRM.ts('org.civicrm.search_kit'),
         // Mix in traits to this controller
         ctrl = angular.extend(this, searchDisplayBaseTrait, searchDisplaySortableTrait),
@@ -61,7 +61,7 @@
 
       this.$onInit = function() {
         buildDisplaySettings();
-        this.initializeDisplay($scope, $());
+        this.initializeDisplay($scope, $element);
         // Keep tab counts up-to-date - put rowCount in current tab if there are no other filters
         $scope.$watch('$ctrl.rowCount', function(val) {
           if (typeof val === 'number' && angular.equals(['has_base'], _.keys(ctrl.filters))) {
@@ -129,7 +129,7 @@
           message: getMessage(),
         }).on('crmConfirm:yes', function() {
           $scope.$apply(function() {
-            return revert ? ctrl.revertSearch(search) : ctrl.deleteSearch(search);
+            return revert ? ctrl.revertSearch(row) : ctrl.deleteSearch(row);
           });
         }).block();
 
@@ -138,27 +138,25 @@
         });
       };
 
-      this.deleteSearch = function(search) {
-        crmStatus({start: ts('Deleting...'), success: ts('Search Deleted')},
-          crmApi4('SavedSearch', 'delete', {where: [['id', '=', search.id]]}).then(function() {
-            ctrl.rowCount = null;
-            ctrl.runSearch();
-          })
+      this.deleteSearch = function(row) {
+        ctrl.runSearch(
+          [['SavedSearch', 'delete', {where: [['id', '=', row.key]]}]],
+          {start: ts('Deleting...'), success: ts('Search Deleted')},
+          row
         );
       };
 
-      this.revertSearch = function(search) {
-        crmStatus({start: ts('Reverting...'), success: ts('Search Reverted')},
-          crmApi4('SavedSearch', 'revert', {
-            where: [['id', '=', search.id]],
+      this.revertSearch = function(row) {
+        ctrl.runSearch(
+          [['SavedSearch', 'revert', {
+            where: [['id', '=', row.key]],
             chain: {
               revertDisplays: ['SearchDisplay', 'revert', {'where': [['saved_search_id', '=', '$id'], ['has_base', '=', true]]}],
               deleteDisplays: ['SearchDisplay', 'delete', {'where': [['saved_search_id', '=', '$id'], ['has_base', '=', false]]}]
             }
-          }).then(function() {
-            ctrl.rowCount = null;
-            ctrl.runSearch();
-          })
+          }]],
+          {start: ts('Reverting...'), success: ts('Search Reverted')},
+          row
         );
       };
 

@@ -148,14 +148,17 @@ function afform_civicrm_managed(&$entities) {
       // ideal cleanup policy might be to (a) deactivate if used and (b) remove if unused
       'cleanup' => 'always',
       'params' => [
-        'version' => 3,
-        // Q: Should we loop through all domains?
-        'domain_id' => CRM_Core_BAO_Domain::getDomain()->id,
-        'is_active' => TRUE,
-        'name' => $afform['name'],
-        'label' => $afform['title'] ?? E::ts('(Untitled)'),
-        'directive' => _afform_angular_module_name($afform['name'], 'dash'),
-        'permission' => "@afform:" . $afform['name'],
+        'version' => 4,
+        'values' => [
+          // Q: Should we loop through all domains?
+          'domain_id' => 'current_domain',
+          'is_active' => TRUE,
+          'name' => $afform['name'],
+          'label' => $afform['title'] ?? E::ts('(Untitled)'),
+          'directive' => _afform_angular_module_name($afform['name'], 'dash'),
+          'permission' => "@afform:" . $afform['name'],
+          'url' => NULL,
+        ],
       ],
     ];
   }
@@ -334,7 +337,7 @@ function afform_civicrm_buildAsset($asset, $params, &$mimeType, &$content) {
   $moduleName = _afform_angular_module_name($params['name'], 'camel');
   $formMetaData = (array) civicrm_api4('Afform', 'get', [
     'checkPermissions' => FALSE,
-    'select' => ['redirect', 'name'],
+    'select' => ['redirect', 'name', 'title'],
     'where' => [['name', '=', $params['name']]],
   ], 0);
   $smarty = CRM_Core_Smarty::singleton();
@@ -363,7 +366,6 @@ function afform_civicrm_alterMenu(&$items) {
       $items[$meta['server_route']] = [
         'page_callback' => 'CRM_Afform_Page_AfformBase',
         'page_arguments' => 'afform=' . urlencode($name),
-        'title' => $meta['title'] ?? '',
         'access_arguments' => [["@afform:$name"], 'and'],
         'is_public' => $meta['is_public'],
       ];

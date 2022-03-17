@@ -53,7 +53,7 @@
      <tr>
       <td colspan="2" {$valueStyle}>
        {$event.event_title}<br />
-       {$event.event_start_date|crmDate}{if $event.event_end_date}-{if $event.event_end_date|date_format:"%Y%m%d" == $event.event_start_date|date_format:"%Y%m%d"}{$event.event_end_date|crmDate:0:1}{else}{$event.event_end_date|crmDate}{/if}{/if}
+       {$event.event_start_date|crmDate}{if $event.event_end_date}-{if $event.event_end_date|date_format:"%Y%m%d" == $event.event_start_date|date_format:"%Y%m%d"}{$event.event_end_date|crmDate:0:1}{else}{$event.event_end_date|crmDate}{/if}{/if} {$event.event_tz}
       </td>
      </tr>
 
@@ -185,7 +185,7 @@
                <td>
                 {$line.unit_price*$line.qty|crmMoney}
                </td>
-               {if isset($line.tax_rate) and ($line.tax_rate != "" || $line.tax_amount != "")}
+               {if $line.tax_rate || $line.tax_amount != ""}
                 <td>
                  {$line.tax_rate|string_format:"%.2f"}%
                 </td>
@@ -226,10 +226,10 @@
         {foreach from=$dataArray item=value key=priceset}
           <tr>
            {if $priceset || $priceset == 0}
-            <td>&nbsp;{if isset($taxTerm)}{$taxTerm}{/if} {$priceset|string_format:"%.2f"}%</td>
+            <td>&nbsp;{$taxTerm} {$priceset|string_format:"%.2f"}%</td>
             <td>&nbsp;{$value|crmMoney:$currency}</td>
            {else}
-            <td>&nbsp;{ts}No{/ts} {if isset($taxTerm)}{$taxTerm}{/if}</td>
+            <td>&nbsp;{ts}No{/ts} {$taxTerm}</td>
             <td>&nbsp;{$value|crmMoney:$currency}</td>
            {/if}
           </tr>

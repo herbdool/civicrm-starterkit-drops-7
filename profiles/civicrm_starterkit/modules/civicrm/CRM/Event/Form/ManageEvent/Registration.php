@@ -29,6 +29,8 @@ class CRM_Event_Form_ManageEvent_Registration extends CRM_Event_Form_ManageEvent
   protected $_profilePostMultiple = [];
   protected $_profilePostMultipleAdd = [];
 
+  protected $_tz;
+
   /**
    * Set variables up before form is built.
    */
@@ -166,6 +168,14 @@ class CRM_Event_Form_ManageEvent_Registration extends CRM_Event_Form_ManageEvent
     $defaults['thankyou_title'] = CRM_Utils_Array::value('thankyou_title', $defaults, ts('Thank You for Registering'));
     $defaults['approval_req_text'] = CRM_Utils_Array::value('approval_req_text', $defaults, ts('Participation in this event requires approval. Submit your registration request here. Once approved, you will receive an email with a link to a web page where you can complete the registration process.'));
 
+    // Convert start and end date defaults to event time zone.
+    if (!empty($defaults['registration_start_date'])) {
+      $defaults['registration_start_date'] = CRM_Utils_Date::convertTimeZone($defaults['registration_start_date'], $this->_tz ?? NULL);
+    }
+    if (!empty($defaults['registration_end_date'])) {
+      $defaults['registration_end_date'] = CRM_Utils_Date::convertTimeZone($defaults['registration_end_date'], $this->_tz ?? NULL);
+    }
+
     return $defaults;
   }
 
@@ -228,6 +238,9 @@ class CRM_Event_Form_ManageEvent_Registration extends CRM_Event_Form_ManageEvent
     $this->add('text', 'registration_link_text', ts('Registration Link Text'));
 
     if (!$this->_isTemplate) {
+      $this->_tz = CRM_Core_DAO::getFieldValue('CRM_Event_DAO_Event', $this->_id, 'event_tz');
+      $tz = CRM_Core_SelectValues::timezone()[$this->_tz];
+      $this->assign('event_tz', $tz ?? '<span class="error-message">' . ts('%1 No timezone set', [1 => '<i class="crm-i fa-warning"></i>']) . '</span>');
       $this->add('datepicker', 'registration_start_date', ts('Registration Start Date'), [], FALSE, ['time' => TRUE]);
       $this->add('datepicker', 'registration_end_date', ts('Registration End Date'), [], FALSE, ['time' => TRUE]);
     }
@@ -311,7 +324,7 @@ class CRM_Event_Form_ManageEvent_Registration extends CRM_Event_Form_ManageEvent
    * Subroutine to insert a Profile Editor widget.
    * depends on getProfileSelectorTypes
    *
-   * @param array &$form
+   * @param \CRM_Core_Form &$form
    * @param int $count
    *   Unique index.
    * @param string $prefix
@@ -392,7 +405,6 @@ class CRM_Event_Form_ManageEvent_Registration extends CRM_Event_Form_ManageEvent
    * Build Email Block.
    *
    * @param CRM_Core_Form $form
-   *
    */
   public function buildMailBlock(&$form) {
     $form->registerRule('emailList', 'callback', 'emailList', 'CRM_Utils_Rule');
@@ -420,7 +432,6 @@ class CRM_Event_Form_ManageEvent_Registration extends CRM_Event_Form_ManageEvent
 
   /**
    * Add local and global form rules.
-   *
    *
    * @return void
    */
@@ -621,7 +632,7 @@ class CRM_Event_Form_ManageEvent_Registration extends CRM_Event_Form_ManageEvent
    * Collect all email fields for an array of profile ids.
    *
    * @param $profileIds
-   * @return bool
+   * @return array
    */
   public static function getEmailFields($profileIds) {
     $emailFields = [];
@@ -771,13 +782,16 @@ class CRM_Event_Form_ManageEvent_Registration extends CRM_Event_Form_ManageEvent
   /**
    * Process the form submission.
    *
-   *
    * @return void
    */
   public function postProcess() {
     $params = $this->exportValues();
 
     $params['id'] = $this->_id;
+
+    if (!isset($this->_tz)) {
+      $this->_tz = CRM_Core_DAO::getFieldValue('CRM_Event_DAO_Event', $this->_id, 'event_tz') ?? CRM_Core_Config::singleton()->userSystem->getTimeZoneString();
+    }
 
     // format params
     $params['is_online_registration'] = CRM_Utils_Array::value('is_online_registration', $params, FALSE);
@@ -786,6 +800,8 @@ class CRM_Event_Form_ManageEvent_Registration extends CRM_Event_Form_ManageEvent
     $params['is_multiple_registrations'] = CRM_Utils_Array::value('is_multiple_registrations', $params, FALSE);
     $params['allow_same_participant_emails'] = CRM_Utils_Array::value('allow_same_participant_emails', $params, FALSE);
     $params['requires_approval'] = CRM_Utils_Array::value('requires_approval', $params, FALSE);
+    $params['registration_start_date'] = !empty($params['registration_start_date']) ? CRM_Utils_Date::convertTimeZone($params['registration_start_date'], NULL, $this->_tz ?? NULL) : $params['registration_start_date'];
+    $params['registration_end_date'] = !empty($params['registration_end_date']) ? CRM_Utils_Date::convertTimeZone($params['registration_end_date'], NULL, $this->_tz ?? NULL) : $params['registration_end_date'];
 
     // reset is_email confirm if not online reg
     if (!$params['is_online_registration']) {

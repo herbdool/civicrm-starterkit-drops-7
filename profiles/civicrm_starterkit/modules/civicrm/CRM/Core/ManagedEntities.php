@@ -116,14 +116,10 @@ class CRM_Core_ManagedEntities {
    * existing entities, and remove orphaned (stale) entities.
    *
    * @param bool $ignoreUpgradeMode
-   *
+   *   Unused.
    * @throws \CRM_Core_Exception
    */
   public function reconcile($ignoreUpgradeMode = FALSE) {
-    // Do not reconcile whilst we are in upgrade mode
-    if (CRM_Core_Config::singleton()->isUpgradeMode() && !$ignoreUpgradeMode) {
-      return;
-    }
     $this->loadDeclarations();
     if ($error = $this->validate($this->getDeclarations())) {
       throw new CRM_Core_Exception($error);
@@ -315,7 +311,7 @@ class CRM_Core_ManagedEntities {
       $todo['params']['checkPermissions'] = FALSE;
     }
 
-    $result = civicrm_api($todo['entity_type'], 'create', $todo['params']);
+    $result = civicrm_api($todo['entity_type'], 'create', ['debug' => TRUE] + $todo['params']);
     if (!empty($result['is_error'])) {
       $this->onApiError($todo['entity_type'], 'create', $todo['params'], $result);
     }
@@ -539,7 +535,7 @@ class CRM_Core_ManagedEntities {
   }
 
   /**
-   * @param $declarations
+   * @param array $declarations
    *
    * @return string|bool
    *   string on error, or FALSE

@@ -45,12 +45,6 @@ class CRM_Event_BAO_Participant extends CRM_Event_DAO_Participant {
   ];
 
   /**
-   */
-  public function __construct() {
-    parent::__construct();
-  }
-
-  /**
    * Takes an associative array and creates a participant object.
    *
    * the function extract all the params it needs to initialize the create a
@@ -798,7 +792,7 @@ WHERE  civicrm_participant.id = {$participantId}
    *
    * @param array $defaults
    * @param string $property
-   * @param string $lookup
+   * @param string[] $lookup
    * @param bool $reverse
    *
    * @return bool
@@ -1397,6 +1391,9 @@ UPDATE  civicrm_participant
     ) {
       return $mailSent;
     }
+
+    CRM_Event_BAO_Event::setOutputTimeZone($eventDetails);
+
     $toEmail = $contactDetails['email'] ?? NULL;
     if ($toEmail) {
 
@@ -1477,7 +1474,7 @@ UPDATE  civicrm_participant
    *
    * @return string
    */
-  public function updateStatusMessage($participantId, $statusChangeTo, $fromStatusId) {
+  public static function updateStatusMessage($participantId, $statusChangeTo, $fromStatusId) {
     $statusMsg = NULL;
     $results = self::transitionParticipants([$participantId],
       $statusChangeTo, $fromStatusId, TRUE
@@ -1596,8 +1593,7 @@ UPDATE  civicrm_participant
    * @param int $newStatusId
    *   New status.
    *
-   * @return bool
-   *   true if allowed
+   * @return array
    */
   public static function getValidAdditionalIds($participantId, $oldStatusId, $newStatusId) {
 
