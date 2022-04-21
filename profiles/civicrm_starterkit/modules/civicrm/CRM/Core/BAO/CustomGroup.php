@@ -18,7 +18,15 @@
 /**
  * Business object for managing custom data groups.
  */
-class CRM_Core_BAO_CustomGroup extends CRM_Core_DAO_CustomGroup {
+class CRM_Core_BAO_CustomGroup extends CRM_Core_DAO_CustomGroup implements \Civi\Core\HookInterface {
+
+  /**
+   * @param \Civi\Core\Event\PostEvent $e
+   * @see CRM_Utils_Hook::post()
+   */
+  public static function self_hook_civicrm_post(\Civi\Core\Event\PostEvent $e): void {
+    Civi::cache('metadata')->flush();
+  }
 
   /**
    * Takes an associative array and creates a custom group object.
@@ -207,17 +215,20 @@ class CRM_Core_BAO_CustomGroup extends CRM_Core_DAO_CustomGroup {
   }
 
   /**
-   * Fetch object based on array of properties.
+   * Retrieve DB object and copy to defaults array.
    *
    * @param array $params
-   *   (reference ) an assoc array of name/value pairs.
+   *   Array of criteria values.
    * @param array $defaults
-   *   (reference ) an assoc array to hold the flattened values.
+   *   Array to be populated with found values.
    *
-   * @return CRM_Core_DAO_CustomGroup
+   * @return self|null
+   *   The DAO object, if found.
+   *
+   * @deprecated
    */
-  public static function retrieve(&$params, &$defaults) {
-    return CRM_Core_DAO::commonRetrieve('CRM_Core_DAO_CustomGroup', $params, $defaults);
+  public static function retrieve($params, &$defaults) {
+    return self::commonRetrieve(self::class, $params, $defaults);
   }
 
   /**
@@ -1918,6 +1929,7 @@ SELECT IF( EXISTS(SELECT name FROM civicrm_contact_type WHERE name like %1), 1, 
               'field_data_type' => $properties['data_type'] ?? NULL,
               'field_value' => CRM_Core_BAO_CustomField::displayValue($values['data'], $properties['id'], $entityId),
               'options_per_line' => $properties['options_per_line'] ?? NULL,
+              'data' => $values['data'],
             ];
             // editable = whether this set contains any non-read-only fields
             if (!isset($details[$groupID][$values['id']]['editable'])) {
@@ -1971,6 +1983,11 @@ SELECT IF( EXISTS(SELECT name FROM civicrm_contact_type WHERE name like %1), 1, 
       }
     }
     else {
+      $form->addExpectedSmartyVariables([
+        'multiRecordDisplay',
+        'groupId',
+        'skipTitle',
+      ]);
       $form->assign_by_ref("{$prefix}viewCustomData", $details);
       return $details;
     }

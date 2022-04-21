@@ -110,7 +110,7 @@ class LoadAdminData extends \Civi\Api4\Generic\AbstractAction {
       $joins = array_column(\CRM_Utils_Array::findAll($layout, 'af-join'), 'af-join');
       $entities = array_unique(array_merge($entities, $joins));
       $blockTags = array_unique(array_column(\CRM_Utils_Array::findAll($layout, function($el) use ($allAfforms) {
-        return in_array($el['#tag'], $allAfforms);
+        return isset($el['#tag']) && in_array($el['#tag'], $allAfforms);
       }), '#tag'));
       foreach ($blockTags as $blockTag) {
         if (!isset($info['blocks'][$blockTag])) {
@@ -153,8 +153,8 @@ class LoadAdminData extends \Civi\Api4\Generic\AbstractAction {
     }
 
     if ($info['definition']['type'] === 'block') {
-      $blockEntity = $info['definition']['join_entity'] ?? $info['definition']['entity_type'];
-      if ($blockEntity !== '*') {
+      $blockEntity = $info['definition']['join_entity'] ?? $info['definition']['entity_type'] ?? NULL;
+      if ($blockEntity) {
         $entities[] = $blockEntity;
       }
       $scanBlocks($info['definition']['layout']);

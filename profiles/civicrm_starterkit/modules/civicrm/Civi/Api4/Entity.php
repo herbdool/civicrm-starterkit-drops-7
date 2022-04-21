@@ -80,8 +80,12 @@ class Entity extends Generic\AbstractEntity {
           'description' => 'Class name for dao-based entities',
         ],
         [
+          'name' => 'table_name',
+          'description' => 'Name of sql table, if applicable',
+        ],
+        [
           'name' => 'primary_key',
-          'type' => 'Array',
+          'data_type' => 'Array',
           'description' => 'Name of unique identifier field(s) (e.g. [id])',
         ],
         [
@@ -121,6 +125,11 @@ class Entity extends Generic\AbstractEntity {
           'name' => 'class',
           'data_type' => 'String',
           'description' => 'PHP class name',
+        ],
+        [
+          'name' => 'class_args',
+          'data_type' => 'Array',
+          'description' => 'Arguments needed by php action factory functions (used when multiple entities share a class, e.g. CustomValue).',
         ],
         [
           'name' => 'bridge',

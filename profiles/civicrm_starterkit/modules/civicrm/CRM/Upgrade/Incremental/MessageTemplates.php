@@ -315,8 +315,15 @@ class CRM_Upgrade_Incremental_MessageTemplates {
         ],
       ],
       [
-        // This is the same list of templates that were modified in 5.47.alpha1. We need to update them again to undo the {$event.event_tz} bits.
-        'version' => '5.47.3',
+        'version' => '5.48.alpha1',
+        'upgrade_descriptor' => ts('Replace {receipt_text_renewal} with {receipt_text}'),
+        'templates' => [
+          ['name' => 'membership_offline_receipt', 'type' => 'html'],
+          ['name' => 'membership_offline_receipt', 'type' => 'text'],
+        ],
+      ],
+      [
+        'version' => '5.48.beta2',
         'upgrade_descriptor' => ts('Revert time zone for Event dates'),
         'templates' => [
           ['name' => 'event_online_receipt', 'type' => 'html'],
