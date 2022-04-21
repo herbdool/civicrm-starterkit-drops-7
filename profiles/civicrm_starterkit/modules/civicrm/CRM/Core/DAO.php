@@ -1498,13 +1498,13 @@ LIKE %1
    * Fetch object based on array of properties.
    *
    * @param string $daoName
-   *   Name of the dao object.
+   *   Name of the dao class.
    * @param array $params
    *   (reference) an assoc array of name/value pairs.
    * @param array $defaults
    *   (reference) an assoc array to hold the flattened values.
    * @param array $returnProperities
-   *   An assoc array of fields that need to be returned, eg array( 'first_name', 'last_name').
+   *   An assoc array of fields that need to be returned, e.g. ['first_name', 'last_name'].
    *
    * @return static|null
    */
@@ -2129,7 +2129,6 @@ SELECT contact_id
    *   an object of type referenced by daoName
    */
   public static function commonRetrieveAll($daoName, $fieldIdName, $fieldId, &$details, $returnProperities = NULL) {
-    require_once str_replace('_', DIRECTORY_SEPARATOR, $daoName) . ".php";
     $object = new $daoName();
     $object->$fieldIdName = $fieldId;
 
@@ -3082,11 +3081,14 @@ SELECT contact_id
     $fields = $this->fields();
     foreach ($fields as $fieldName => $field) {
       // Clause for contact-related entities like Email, Relationship, etc.
-      if (strpos($fieldName, 'contact_id') === 0 && CRM_Utils_Array::value('FKClassName', $field) == 'CRM_Contact_DAO_Contact') {
-        $clauses[$fieldName] = CRM_Utils_SQL::mergeSubquery('Contact');
+      if (strpos($field['name'], 'contact_id') === 0 && CRM_Utils_Array::value('FKClassName', $field) == 'CRM_Contact_DAO_Contact') {
+        $contactClause = CRM_Utils_SQL::mergeSubquery('Contact');
+        if (!empty($contactClause)) {
+          $clauses[$field['name']] = $contactClause;
+        }
       }
       // Clause for an entity_table/entity_id combo
-      if ($fieldName === 'entity_id' && isset($fields['entity_table'])) {
+      if ($field['name'] === 'entity_id' && isset($fields['entity_table'])) {
         $relatedClauses = [];
         $relatedEntities = $this->buildOptions('entity_table', 'get');
         foreach ((array) $relatedEntities as $table => $ent) {
