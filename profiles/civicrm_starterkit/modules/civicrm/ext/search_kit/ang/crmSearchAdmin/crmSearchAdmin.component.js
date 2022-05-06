@@ -13,8 +13,8 @@
         fieldsForJoinGetters = {};
 
       this.DEFAULT_AGGREGATE_FN = 'GROUP_CONCAT';
-      this.afformEnabled = CRM.crmSearchAdmin.afformEnabled;
-      this.afformAdminEnabled = CRM.crmSearchAdmin.afformAdminEnabled;
+      this.afformEnabled = 'org.civicrm.afform' in CRM.crmSearchAdmin.modules;
+      this.afformAdminEnabled = 'org.civicrm.afform_admin' in CRM.crmSearchAdmin.modules;
       this.displayTypes = _.indexBy(CRM.crmSearchAdmin.displayTypes, 'id');
       this.searchDisplayPath = CRM.url('civicrm/search');
       this.afformPath = CRM.url('civicrm/admin/afform');
@@ -135,10 +135,11 @@
       };
 
       this.addDisplay = function(type) {
-        var count = _.filter(ctrl.savedSearch.displays, {type: type}).length;
+        var count = _.filter(ctrl.savedSearch.displays, {type: type}).length,
+          searchLabel = ctrl.savedSearch.label || searchMeta.getEntity(ctrl.savedSearch.api_entity).title_plural;
         ctrl.savedSearch.displays.push({
           type: type,
-          label: ctrl.displayTypes[type].label + (count ? ' ' + (++count) : '')
+          label: searchLabel + ' ' + ctrl.displayTypes[type].label + ' ' + (count + 1),
         });
         $scope.selectTab('display_' + (ctrl.savedSearch.displays.length - 1));
       };
@@ -429,7 +430,7 @@
         }
         var arg = _.findWhere(searchMeta.parseExpr(col).args, {type: 'field'}) || {};
         // If the column is not a database field, no
-        if (!arg.field || !arg.field.entity || arg.field.type !== 'Field') {
+        if (!arg.field || !arg.field.entity || !_.includes(['Field', 'Custom', 'Extra'], arg.field.type)) {
           return false;
         }
         // If the column is used for a groupBy, no
@@ -500,7 +501,7 @@
           prefix = typeof prefix === 'undefined' ? '' : prefix;
           _.each(fields, function(field) {
             var item = {
-              id: prefix + field.name + (field.options ? suffix : ''),
+              id: prefix + field.name + (field.suffixes && _.includes(field.suffixes, suffix.replace(':', '')) ? suffix : ''),
               text: field.label,
               description: field.description
             };
