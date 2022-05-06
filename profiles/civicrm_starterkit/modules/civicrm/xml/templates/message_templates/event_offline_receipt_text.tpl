@@ -25,11 +25,11 @@
 {/if}
 ==========================================================={if !empty($pricesetFieldsCount) }===================={/if}
 
-{elseif !empty($is_pay_later)}
+{elseif $is_pay_later}
 
 ==========================================================={if !empty($pricesetFieldsCount) }===================={/if}
 
-{if isset($pay_later_receipt)}{$pay_later_receipt}{/if}
+{$pay_later_receipt}
 ==========================================================={if !empty($pricesetFieldsCount) }===================={/if}
 
 {/if}
@@ -119,7 +119,7 @@
 {/foreach}
 
 {if !empty($dataArray)}
-{if isset($totalAmount) and isset($totalTaxAmount)}
+{if $totalAmount and $totalTaxAmount}
 {ts}Amount before Tax{/ts}: {$totalAmount-$totalTaxAmount|crmMoney:$currency}
 {/if}
 
@@ -138,7 +138,7 @@
 {/foreach}
 {/if}
 
-{if isset($totalTaxAmount)}
+{if $totalTaxAmount}
 {ts}Total Tax Amount{/ts}: {$totalTaxAmount|crmMoney:$currency}
 {/if}
 {if !empty($isPrimary)}
@@ -167,7 +167,7 @@
 {ts}Total Participants{/ts}: {$count}
 {/if}
 
-{if !empty($is_pay_later) }
+{if $is_pay_later}
 
 ==========================================================={if !empty($pricesetFieldsCount) }===================={/if}
 

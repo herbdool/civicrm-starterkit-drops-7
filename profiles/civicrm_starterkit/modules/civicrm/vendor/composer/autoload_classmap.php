@@ -22,6 +22,7 @@ return array(
     'HTML5_Tokenizer' => $vendorDir . '/dompdf/dompdf/lib/html5lib/Tokenizer.php',
     'HTML5_TreeBuilder' => $vendorDir . '/dompdf/dompdf/lib/html5lib/TreeBuilder.php',
     'ICallbackNamed' => $vendorDir . '/electrolinux/phpquery/phpQuery/phpQuery/Callback.php',
+    'JsonException' => $vendorDir . '/symfony/polyfill-php73/Resources/stubs/JsonException.php',
     'PDF417' => $vendorDir . '/tecnickcom/tcpdf/include/barcodes/pdf417.php',
     'PEAR_Exception' => $vendorDir . '/pear/pear_exception/PEAR/Exception.php',
     'QRcode' => $vendorDir . '/tecnickcom/tcpdf/include/barcodes/qrcode.php',
