@@ -69,17 +69,20 @@ class CRM_Price_BAO_PriceSet extends CRM_Price_DAO_PriceSet {
   }
 
   /**
-   * Fetch object based on array of properties.
+   * Retrieve DB object and copy to defaults array.
    *
    * @param array $params
-   *   (reference ) an assoc array of name/value pairs.
+   *   Array of criteria values.
    * @param array $defaults
-   *   (reference ) an assoc array to hold the flattened values.
+   *   Array to be populated with found values.
    *
-   * @return CRM_Price_DAO_PriceSet
+   * @return self|null
+   *   The DAO object, if found.
+   *
+   * @deprecated
    */
-  public static function retrieve(&$params, &$defaults) {
-    return CRM_Core_DAO::commonRetrieve('CRM_Price_DAO_PriceSet', $params, $defaults);
+  public static function retrieve($params, &$defaults) {
+    return self::commonRetrieve(self::class, $params, $defaults);
   }
 
   /**
@@ -1242,28 +1245,6 @@ GROUP BY     mt.member_of_contact_id ";
     }
 
     return $autoRenewOption;
-  }
-
-  /**
-   * Retrieve auto renew frequency and interval.
-   *
-   * @param int $priceSetId
-   *   Price set id.
-   *
-   * @return array
-   *   associate array of frequency interval and unit
-   */
-  public static function getRecurDetails($priceSetId) {
-    $query = 'SELECT mt.duration_interval, mt.duration_unit
-            FROM civicrm_price_field_value pfv
-            INNER JOIN civicrm_membership_type mt ON pfv.membership_type_id = mt.id
-            INNER JOIN civicrm_price_field pf ON pfv.price_field_id = pf.id
-            WHERE pf.price_set_id = %1 LIMIT 1';
-
-    $params = [1 => [$priceSetId, 'Integer']];
-    $dao = CRM_Core_DAO::executeQuery($query, $params);
-    $dao->fetch();
-    return [$dao->duration_interval, $dao->duration_unit];
   }
 
   /**
