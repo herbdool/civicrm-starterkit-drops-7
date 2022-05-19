@@ -4,7 +4,7 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit58a6da2a8ea86ba17fc670924948d537
+class ComposerStaticInit1cb5fcc0859fdc6e7b70d9662a9f78fa
 {
     public static $files = array (
         '320cde22f66dd4f5d3fd621d3e88b98f' => __DIR__ . '/..' . '/symfony/polyfill-ctype/bootstrap.php',
@@ -78,6 +78,7 @@ class ComposerStaticInit58a6da2a8ea86ba17fc670924948d537
         '2cffec82183ee1cea088009cef9a6fc3' => __DIR__ . '/..' . '/ezyang/htmlpurifier/library/HTMLPurifier.composer.php',
         '9e4824c5afbdc1482b6025ce3d4dfde8' => __DIR__ . '/..' . '/league/csv/src/functions_include.php',
         'def43f6c87e4f8dfd0c9e1b1bab14fe8' => __DIR__ . '/..' . '/symfony/polyfill-iconv/bootstrap.php',
+        '0d59ee240a4cd96ddbb4ff164fccea4d' => __DIR__ . '/..' . '/symfony/polyfill-php73/bootstrap.php',
         '667aeda72477189d0494fecd327c3641' => __DIR__ . '/..' . '/symfony/var-dumper/Resources/functions/dump.php',
         'bad842bce63596a608e2623519fb382c' => __DIR__ . '/..' . '/xkerman/restricted-unserialize/src/function.php',
     );
@@ -113,6 +114,7 @@ class ComposerStaticInit58a6da2a8ea86ba17fc670924948d537
         ),
         'S' => 
         array (
+            'Symfony\\Polyfill\\Php73\\' => 23,
             'Symfony\\Polyfill\\Php72\\' => 23,
             'Symfony\\Polyfill\\Mbstring\\' => 26,
             'Symfony\\Polyfill\\Intl\\Idn\\' => 26,
@@ -217,6 +219,10 @@ class ComposerStaticInit58a6da2a8ea86ba17fc670924948d537
         'TYPO3\\PharStreamWrapper\\' => 
         array (
             0 => __DIR__ . '/..' . '/typo3/phar-stream-wrapper/src',
+        ),
+        'Symfony\\Polyfill\\Php73\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/symfony/polyfill-php73',
         ),
         'Symfony\\Polyfill\\Php72\\' => 
         array (
@@ -540,6 +546,7 @@ class ComposerStaticInit58a6da2a8ea86ba17fc670924948d537
         'HTML5_Tokenizer' => __DIR__ . '/..' . '/dompdf/dompdf/lib/html5lib/Tokenizer.php',
         'HTML5_TreeBuilder' => __DIR__ . '/..' . '/dompdf/dompdf/lib/html5lib/TreeBuilder.php',
         'ICallbackNamed' => __DIR__ . '/..' . '/electrolinux/phpquery/phpQuery/phpQuery/Callback.php',
+        'JsonException' => __DIR__ . '/..' . '/symfony/polyfill-php73/Resources/stubs/JsonException.php',
         'PDF417' => __DIR__ . '/..' . '/tecnickcom/tcpdf/include/barcodes/pdf417.php',
         'PEAR_Exception' => __DIR__ . '/..' . '/pear/pear_exception/PEAR/Exception.php',
         'QRcode' => __DIR__ . '/..' . '/tecnickcom/tcpdf/include/barcodes/qrcode.php',
@@ -670,11 +677,11 @@ class ComposerStaticInit58a6da2a8ea86ba17fc670924948d537
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit58a6da2a8ea86ba17fc670924948d537::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit58a6da2a8ea86ba17fc670924948d537::$prefixDirsPsr4;
-            $loader->prefixesPsr0 = ComposerStaticInit58a6da2a8ea86ba17fc670924948d537::$prefixesPsr0;
-            $loader->fallbackDirsPsr0 = ComposerStaticInit58a6da2a8ea86ba17fc670924948d537::$fallbackDirsPsr0;
-            $loader->classMap = ComposerStaticInit58a6da2a8ea86ba17fc670924948d537::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit1cb5fcc0859fdc6e7b70d9662a9f78fa::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit1cb5fcc0859fdc6e7b70d9662a9f78fa::$prefixDirsPsr4;
+            $loader->prefixesPsr0 = ComposerStaticInit1cb5fcc0859fdc6e7b70d9662a9f78fa::$prefixesPsr0;
+            $loader->fallbackDirsPsr0 = ComposerStaticInit1cb5fcc0859fdc6e7b70d9662a9f78fa::$fallbackDirsPsr0;
+            $loader->classMap = ComposerStaticInit1cb5fcc0859fdc6e7b70d9662a9f78fa::$classMap;
 
         }, null, ClassLoader::class);
     }

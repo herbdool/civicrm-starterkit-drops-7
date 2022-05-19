@@ -219,7 +219,7 @@ class Api4SelectQuery {
     }
     else {
       if ($this->forceSelectId) {
-        $keys = CoreUtil::getInfoItem($this->getEntity(), 'primary_key');
+        $keys = (array) CoreUtil::getInfoItem($this->getEntity(), 'primary_key');
         $select = array_merge($keys, $select);
       }
 
@@ -457,6 +457,13 @@ class Api4SelectQuery {
         $fieldName = count($expr->getFields()) === 1 ? $expr->getFields()[0] : NULL;
         $field = $this->getField($fieldName, TRUE);
         FormattingUtil::formatInputValue($value, $fieldName, $field, $operator);
+      }
+      elseif ($expr->getType() === 'SqlFunction') {
+        $fauxField = [
+          'name' => NULL,
+          'data_type' => $expr::getDataType(),
+        ];
+        FormattingUtil::formatInputValue($value, NULL, $fauxField, $operator);
       }
       $fieldAlias = $expr->render($this->apiFieldSpec);
     }
@@ -739,11 +746,13 @@ class Api4SelectQuery {
       }
       $tableName = CoreUtil::getTableName($entity);
       // Save join info to be retrieved by $this->getExplicitJoin()
+      $joinOn = array_filter(array_filter($join, 'is_array'));
       $this->explicitJoins[$alias] = [
         'entity' => $entity,
         'alias' => $alias,
         'table' => $tableName,
         'bridge' => NULL,
+        'on' => $joinOn,
       ];
       // If the first condition is a string, it's the name of a bridge entity
       if (!empty($join[0]) && is_string($join[0]) && \CRM_Utils_Rule::alphanumeric($join[0])) {
@@ -751,7 +760,7 @@ class Api4SelectQuery {
       }
       else {
         $conditions = $this->getJoinConditions($join, $entity, $alias, $joinEntityFields);
-        foreach (array_filter($join) as $clause) {
+        foreach ($joinOn as $clause) {
           $conditions[] = $this->treeWalkClauses($clause, 'ON');
         }
         $this->join($side, $tableName, $alias, $conditions);
