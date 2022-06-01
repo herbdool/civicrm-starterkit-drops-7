@@ -1,5 +1,9 @@
 #Changelog
 
+## June 1, 2022
+
+Security upgrade: CiviCRM 5.47.4 to CiviCRM 5.49.4.
+
 ## July 5, 2018
 
 Fixed a minor error with the install profile.
