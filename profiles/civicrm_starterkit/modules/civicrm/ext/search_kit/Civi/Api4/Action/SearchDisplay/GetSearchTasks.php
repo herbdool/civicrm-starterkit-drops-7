@@ -24,6 +24,7 @@ class GetSearchTasks extends \Civi\Api4\Generic\AbstractAction {
    * @throws \API_Exception
    */
   public function _run(\Civi\Api4\Generic\Result $result) {
+    // Adding checkPermissions filters out actions the user is not allowed to perform
     $entity = Entity::get($this->checkPermissions)->addWhere('name', '=', $this->entity)
       ->addSelect('name', 'title_plural')
       ->setChain(['actions' => ['$name', 'getActions', ['where' => [['name', 'IN', ['update', 'delete']]]], 'name']])
@@ -107,6 +108,27 @@ class GetSearchTasks extends \Civi\Api4\Generic\AbstractAction {
             ],
           ];
         }
+      }
+      if (!$this->checkPermissions || \CRM_Core_Permission::check(['merge duplicate contacts', 'delete contacts'])) {
+        $tasks[$entity['name']]['contact.merge'] = [
+          'title' => E::ts('Dedupe - Merge 2 Contacts'),
+          'number' => '=== 2',
+          'icon' => 'fa-compress',
+          'crmPopup' => [
+            'path' => "'civicrm/contact/merge'",
+            'query' => '{reset: 1, cid: ids[0], oid: ids[1], action: "update"}',
+          ],
+        ];
+      }
+      if (\CRM_Core_Component::isEnabled('CiviMail') && (
+        \CRM_Core_Permission::access('CiviMail') || !$this->checkPermissions ||
+        (\CRM_Mailing_Info::workflowEnabled() && \CRM_Core_Permission::check('create mailings'))
+      )) {
+        $tasks[$entity['name']]['contact.mailing'] = [
+          'title' => E::ts('Email - schedule/send via CiviMail'),
+          'uiDialog' => ['templateUrl' => '~/crmSearchTasks/crmSearchTaskMailing.html'],
+          'icon' => 'fa-paper-plane',
+        ];
       }
     }
 

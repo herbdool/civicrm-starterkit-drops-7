@@ -14,7 +14,7 @@
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
  */
-class CRM_Contact_BAO_Contact extends CRM_Contact_DAO_Contact implements Civi\Test\HookInterface {
+class CRM_Contact_BAO_Contact extends CRM_Contact_DAO_Contact implements Civi\Core\HookInterface {
 
   /**
    * SQL function used to format the phone_numeric field via trigger.
@@ -742,7 +742,7 @@ WHERE     civicrm_contact.id = " . CRM_Utils_Type::escape($id, 'Integer');
       'id' => $contact->id,
       'is_deleted' => 1,
     ];
-    CRM_Utils_Hook::pre('update', $contact->contact_type, $contact->id, $updateParams);
+    CRM_Utils_Hook::pre('edit', $contact->contact_type, $contact->id, $updateParams);
 
     $params = [1 => [$contact->id, 'Integer']];
     $query = 'DELETE FROM civicrm_uf_match WHERE contact_id = %1';
@@ -752,7 +752,7 @@ WHERE     civicrm_contact.id = " . CRM_Utils_Type::escape($id, 'Integer');
     $contact->save();
     CRM_Core_BAO_Log::register($contact->id, 'civicrm_contact', $contact->id);
 
-    CRM_Utils_Hook::post('update', $contact->contact_type, $contact->id, $contact);
+    CRM_Utils_Hook::post('edit', $contact->contact_type, $contact->id, $contact);
 
     return TRUE;
   }
@@ -868,6 +868,9 @@ WHERE     civicrm_contact.id = " . CRM_Utils_Type::escape($id, 'Integer');
   /**
    * Fetch object based on array of properties.
    *
+   * @deprecated This is called from a few places but creates rather than solves
+   * complexity.
+   *
    * @param array $params
    *   (reference ) an assoc array of name/value pairs.
    * @param array $defaults
@@ -890,13 +893,12 @@ WHERE     civicrm_contact.id = " . CRM_Utils_Type::escape($id, 'Integer');
 
     unset($params['id']);
 
-    //get the block information for this contact
-    $entityBlock = ['contact_id' => $params['contact_id']];
-    $blocks = CRM_Core_BAO_Location::getValues($entityBlock, $microformat);
-    $defaults = array_merge($defaults, $blocks);
-    foreach ($blocks as $block => $value) {
-      $contact->$block = $value;
-    }
+    $contact->im = $defaults['im'] = CRM_Core_BAO_IM::getValues(['contact_id' => $params['contact_id']]);
+    $contact->email = $defaults['email'] = CRM_Core_BAO_Email::getValues(['contact_id' => $params['contact_id']]);
+    $contact->openid = $defaults['openid'] = CRM_Core_BAO_OpenID::getValues(['contact_id' => $params['contact_id']]);
+    $contact->phone = $defaults['phone'] = CRM_Core_BAO_Phone::getValues(['contact_id' => $params['contact_id']]);
+    $contact->address = $defaults['address'] = CRM_Core_BAO_Address::getValues(['contact_id' => $params['contact_id']], $microformat);
+    $contact->website = CRM_Core_BAO_Website::getValues($params, $defaults);
 
     if (!isset($params['noNotes'])) {
       $contact->notes = CRM_Core_BAO_Note::getValues($params, $defaults);
@@ -908,10 +910,6 @@ WHERE     civicrm_contact.id = " . CRM_Utils_Type::escape($id, 'Integer');
 
     if (!isset($params['noGroups'])) {
       $contact->groupContact = CRM_Contact_BAO_GroupContact::getValues($params, $defaults);
-    }
-
-    if (!isset($params['noWebsite'])) {
-      $contact->website = CRM_Core_BAO_Website::getValues($params, $defaults);
     }
 
     return $contact;
@@ -2616,7 +2614,7 @@ LEFT JOIN civicrm_email    ON ( civicrm_contact.id = civicrm_email.contact_id )
    * @return CRM_Contact_BAO_Contact|null
    *   The found object or null
    */
-  public static function getValues(&$params, &$values) {
+  public static function getValues($params, &$values) {
     $contact = new CRM_Contact_BAO_Contact();
 
     $contact->copyValues($params);
@@ -3031,18 +3029,6 @@ LEFT JOIN civicrm_email    ON ( civicrm_contact.id = civicrm_email.contact_id )
         'component' => 'CiviCase',
         'href' => CRM_Utils_System::url('civicrm/case/add', 'reset=1&action=add&context=case'),
         'permissions' => ['add cases'],
-      ],
-      'grant' => [
-        'title' => ts('Add Grant'),
-        'weight' => 26,
-        'ref' => 'new-grant',
-        'key' => 'grant',
-        'tab' => 'grant',
-        'component' => 'CiviGrant',
-        'href' => CRM_Utils_System::url('civicrm/contact/view/grant',
-          'reset=1&action=add&context=grant'
-        ),
-        'permissions' => ['edit grants'],
       ],
       'rel' => [
         'title' => ts('Add Relationship'),
@@ -3736,6 +3722,30 @@ LEFT JOIN civicrm_address ON ( civicrm_address.contact_id = civicrm_contact.id )
     }
 
     return CRM_Contact_BAO_Contact_Permission::allow($record['id'], $actionType, $userID);
+  }
+
+  /**
+   * Get icon for a particular contact.
+   *
+   * Example: `CRM_Contact_BAO_Contact::getIcon('Contact', 123)`
+   *
+   * @param string $entityName
+   *   Always "Contact".
+   * @param int $entityId
+   *   Id of the contact.
+   * @throws CRM_Core_Exception
+   */
+  public static function getEntityIcon(string $entityName, int $entityId) {
+    $contactTypes = CRM_Contact_BAO_ContactType::getAllContactTypes();
+    $subTypes = CRM_Utils_Array::explodePadded(CRM_Core_DAO::getFieldValue(parent::class, $entityId, 'contact_sub_type'));
+    foreach ((array) $subTypes as $subType) {
+      if (!empty($contactTypes[$subType]['icon'])) {
+        return $contactTypes[$subType]['icon'];
+      }
+    }
+    // If no sub-type icon, lookup contact type
+    $contactType = CRM_Core_DAO::getFieldValue(parent::class, $entityId, 'contact_type');
+    return $contactTypes[$contactType]['icon'] ?? self::$_icon;
   }
 
 }

@@ -23,7 +23,7 @@ use Civi\Api4\PledgePayment;
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
  */
-class CRM_Contribute_BAO_Contribution extends CRM_Contribute_DAO_Contribution {
+class CRM_Contribute_BAO_Contribution extends CRM_Contribute_DAO_Contribution implements Civi\Test\HookInterface {
 
   /**
    * Static field for all the contribution information that we can potentially import
@@ -316,7 +316,7 @@ class CRM_Contribute_BAO_Contribution extends CRM_Contribute_DAO_Contribution {
   }
 
   /**
-   * Get the values and resolve the most common mappings.
+   * Deprecated contact.get call.
    *
    * Since contribution status is resolved in almost every function that calls getValues it makes
    * sense to have an extra function to resolve it rather than repeat the code.
@@ -330,6 +330,8 @@ class CRM_Contribute_BAO_Contribution extends CRM_Contribute_DAO_Contribution {
    * @return array
    *   Array of the found contribution.
    * @throws CRM_Core_Exception
+   *
+   * @deprecated
    */
   public static function getValuesWithMappings($params) {
     $values = $ids = [];
@@ -606,6 +608,16 @@ class CRM_Contribute_BAO_Contribution extends CRM_Contribute_DAO_Contribution {
     }
 
     return $contribution;
+  }
+
+  /**
+   * Event fired after modifying a contribution.
+   * @param \Civi\Core\Event\PostEvent $event
+   */
+  public static function self_hook_civicrm_post(\Civi\Core\Event\PostEvent $event) {
+    if ($event->action === 'edit') {
+      CRM_Contribute_BAO_ContributionRecur::updateOnTemplateUpdated($event->object);
+    }
   }
 
   /**
@@ -966,27 +978,6 @@ class CRM_Contribute_BAO_Contribution extends CRM_Contribute_DAO_Contribution {
   }
 
   /**
-   * It is possible to override the membership id that is updated from the payment processor.
-   *
-   * Historically Paypal does this & it still does if it determines data is messed up - see
-   * https://lab.civicrm.org/dev/membership/issues/13
-   *
-   * Read the comment block on repeattransaction for more information
-   * about how things should  work.
-   *
-   * @param int $contributionID
-   * @param array $input
-   *
-   * @throws \CiviCRM_API3_Exception
-   */
-  protected static function handleMembershipIDOverride($contributionID, $input) {
-    if (!empty($input['membership_id'])) {
-      Civi::log()->debug('The related membership id has been overridden - this may impact data - see  https://github.com/civicrm/civicrm-core/pull/15053');
-      civicrm_api3('MembershipPayment', 'create', ['contribution_id' => $contributionID, 'membership_id' => $input['membership_id']]);
-    }
-  }
-
-  /**
    * Get transaction information about the contribution.
    *
    * @param int $contributionId
@@ -1234,13 +1225,14 @@ INNER JOIN  civicrm_contact contact ON ( contact.id = c.contact_id )
    *
    * @return mixed|null
    *   $results no of deleted Contribution on success, false otherwise
+   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   public static function deleteContribution($id) {
     CRM_Utils_Hook::pre('delete', 'Contribution', $id);
 
     $transaction = new CRM_Core_Transaction();
 
-    $results = NULL;
     //delete activity record
     $params = [
       'source_record_id' => $id,
@@ -1260,18 +1252,10 @@ INNER JOIN  civicrm_contact contact ON ( contact.id = c.contact_id )
     if (CRM_Price_BAO_PriceSet::getFor('civicrm_contribution', $id)) {
       CRM_Price_BAO_PriceSet::removeFrom('civicrm_contribution', $id);
     }
-    // cleanup line items.
-    $participantId = CRM_Core_DAO::getFieldValue('CRM_Event_DAO_ParticipantPayment', $id, 'participant_id', 'contribution_id');
 
-    // delete any related entity_financial_trxn, financial_trxn and financial_item records.
+    // delete any related financial records.
     CRM_Core_BAO_FinancialTrxn::deleteFinancialTrxn($id);
-
-    if ($participantId) {
-      CRM_Price_BAO_LineItem::deleteLineItems($participantId, 'civicrm_participant');
-    }
-    else {
-      CRM_Price_BAO_LineItem::deleteLineItems($id, 'civicrm_contribution');
-    }
+    LineItem::delete(FALSE)->addWhere('contribution_id', '=', $id)->execute();
 
     //delete note.
     $note = CRM_Core_BAO_Note::getNote($id, 'civicrm_contribution');
@@ -1282,13 +1266,31 @@ INNER JOIN  civicrm_contact contact ON ( contact.id = c.contact_id )
 
     $dao = new CRM_Contribute_DAO_Contribution();
     $dao->id = $id;
-
     $results = $dao->delete();
-
     $transaction->commit();
-
     CRM_Utils_Hook::post('delete', 'Contribution', $dao->id, $dao);
 
+    return $results;
+  }
+
+  /**
+   * Bulk delete multiple records.
+   *
+   * @param array[] $records
+   *
+   * @return static[]
+   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
+   */
+  public static function deleteRecords(array $records): array {
+    $results = [];
+    foreach ($records as $record) {
+      if (self::deleteContribution($record['id'])) {
+        $returnObject = new CRM_Contribute_BAO_Contribution();
+        $returnObject->id = $record['id'];
+        $results[] = $returnObject;
+      }
+    }
     return $results;
   }
 
@@ -2197,17 +2199,6 @@ LEFT JOIN  civicrm_contribution contribution ON ( componentPayment.contribution_
    *  2) repeattransaction code is current munged into completeTransaction code for historical bad coding reasons
    *  3) Repeat transaction duplicates rather than calls Order.create
    *  4) Use of payment.create still limited - completetransaction is more common.
-   * 6) the determination of the membership to be linked is tricksy. The prioritised method is
-   *   to load the membership(s) referred to via line items in the template transactions. Any other
-   *   method is likely to lead to incorrect line items & related entities being created (as the line_item
-   *   link is a required part of 'correct data'). However there are 3 other methods to determine it
-   *   - membership_payment record
-   *   - civicrm_membership.contribution_recur_id
-   *   - input override.
-   *   Passing in an input override WILL ensure the membership is extended to prevent regressions
-   *   of historical processors since this has been handled 'forever' - specifically for paypal.
-   *   albeit by an even nastier mechanism than the current input override.
-   *   The count is out on how correct related entities wind up in this case.
    */
   protected static function repeatTransaction(array $input, array $contributionParams) {
     $templateContribution = CRM_Contribute_BAO_ContributionRecur::getTemplateContribution(
@@ -2233,7 +2224,6 @@ LEFT JOIN  civicrm_contribution contribution ON ( componentPayment.contribution_
     $createContribution = civicrm_api3('Contribution', 'create', $contributionParams);
     $temporaryObject = new CRM_Contribute_BAO_Contribution();
     $temporaryObject->copyCustomFields($templateContribution['id'], $createContribution['id']);
-    self::handleMembershipIDOverride($createContribution['id'], $input);
     // Add new soft credit against current $contribution.
     CRM_Contribute_BAO_ContributionRecur::addrecurSoftCredit($contributionParams['contribution_recur_id'], $createContribution['id']);
     return $createContribution;
@@ -2820,6 +2810,11 @@ INNER JOIN civicrm_activity ON civicrm_activity_contact.activity_id = civicrm_ac
     // the way the pcpParams & honor Params section works is a baby-step towards this.
     $template = CRM_Core_Smarty::singleton();
     $template->assign('billingName', $values['billingName']);
+    // It is unclear if onBehalfProfile is still assigned & where - but
+    // it is still referred to in templates so avoid an e-notice.
+    // Credit card type is assigned on the form layer but should also be
+    // assigned when payment.create is called....
+    $template->ensureVariablesAreAssigned(['onBehalfProfile', 'credit_card_type']);
 
     //assign honor information to receipt message
     $softRecord = CRM_Contribute_BAO_ContributionSoft::getSoftContribution($this->id);
@@ -2850,10 +2845,10 @@ INNER JOIN civicrm_activity ON civicrm_activity_contact.activity_id = civicrm_ac
             'Amount' => CRM_Utils_Money::format($softCredit['amount'], $softCredit['currency']),
           ];
         }
-        $template->assign('softCreditTypes', $softCreditTypes);
-        $template->assign('softCredits', $softCredits);
       }
     }
+    $template->assign('softCreditTypes', $softCreditTypes ?? NULL);
+    $template->assign('softCredits', $softCredits ?? NULL);
 
     $dao = new CRM_Contribute_DAO_ContributionProduct();
     $dao->contribution_id = $this->id;
@@ -2869,6 +2864,9 @@ INNER JOIN civicrm_activity ON civicrm_activity_contact.activity_id = civicrm_ac
       $template->assign('price', $productDAO->price);
       $template->assign('sku', $productDAO->sku);
     }
+    else {
+      $template->assign('selectPremium', FALSE);
+    }
     $template->assign('title', $values['title'] ?? NULL);
     $values['amount'] = CRM_Utils_Array::value('total_amount', $input, (CRM_Utils_Array::value('amount', $input)), NULL);
     if (!$values['amount'] && isset($this->total_amount)) {
@@ -2883,7 +2881,7 @@ INNER JOIN civicrm_activity ON civicrm_activity_contact.activity_id = civicrm_ac
       'title' => NULL,
     ];
 
-    if (strtolower($this->_component) == 'contribute') {
+    if (strtolower($this->_component) === 'contribute') {
       //PCP Info
       $softDAO = new CRM_Contribute_DAO_ContributionSoft();
       $softDAO->contribution_id = $this->id;
@@ -2926,7 +2924,7 @@ INNER JOIN civicrm_activity ON civicrm_activity_contact.activity_id = civicrm_ac
     if (!empty($values['softContributions'])) {
       $template->assign('softContributions', $values['softContributions']);
     }
-    if ($this->_component == 'event') {
+    if ($this->_component === 'event') {
       $template->assign('title', $values['event']['title']);
       $participantRoles = CRM_Event_PseudoConstant::participantRole();
       $viewRoles = [];
@@ -3631,7 +3629,7 @@ INNER JOIN civicrm_activity ON civicrm_activity_contact.activity_id = civicrm_ac
       $info['transaction'] = self::getContributionTransactionInformation($contributionId, $contribution['financial_type_id']);
     }
 
-    $info['payment_links'] = self::getContributionPaymentLinks($id, $paymentBalance, $info['contribution_status']);
+    $info['payment_links'] = self::getContributionPaymentLinks($id, $info['contribution_status']);
     return $info;
   }
 
@@ -4272,15 +4270,16 @@ LIMIT 1;";
    * then a refund link.
    *
    * @param int $id
-   * @param float $balance
    * @param string $contributionStatus
    *
    * @return array
    *   $actionLinks Links array containing:
    *     -url
    *     -title
+   *
+   * @internal - not supported for use outside of core.
    */
-  protected static function getContributionPaymentLinks($id, $balance, $contributionStatus) {
+  public static function getContributionPaymentLinks(int $id, string $contributionStatus): array {
     if ($contributionStatus === 'Failed' || !CRM_Core_Permission::check('edit contributions')) {
       // In general the balance is the best way to determine if a payment can be added or not,
       // but not for Failed contributions, where we don't accept additional payments at the moment.
@@ -4290,36 +4289,53 @@ LIMIT 1;";
     }
     $actionLinks = [];
     $actionLinks[] = [
-      'url' => CRM_Utils_System::url('civicrm/payment', [
+      'url' => 'civicrm/payment',
+      'title' => ts('Record Payment'),
+      'accessKey' => '',
+      'ref' => '',
+      'name' => '',
+      'qs' => [
         'action' => 'add',
         'reset' => 1,
         'id' => $id,
         'is_refund' => 0,
-      ]),
-      'title' => ts('Record Payment'),
+      ],
+      'extra' => '',
     ];
 
     if (CRM_Core_Config::isEnabledBackOfficeCreditCardPayments()) {
       $actionLinks[] = [
-        'url' => CRM_Utils_System::url('civicrm/payment', [
+        'url' => 'civicrm/payment',
+        'title' => ts('Submit Credit Card payment'),
+        'accessKey' => '',
+        'ref' => '',
+        'name' => '',
+        'qs' => [
           'action' => 'add',
           'reset' => 1,
           'is_refund' => 0,
           'id' => $id,
           'mode' => 'live',
-        ]),
-        'title' => ts('Submit Credit Card payment'),
+        ],
+        'extra' => '',
       ];
     }
-    $actionLinks[] = [
-      'url' => CRM_Utils_System::url('civicrm/payment', [
-        'action' => 'add',
-        'reset' => 1,
-        'id' => $id,
-        'is_refund' => 1,
-      ]),
-      'title' => ts('Record Refund'),
-    ];
+    if ($contributionStatus !== 'Pending') {
+      $actionLinks[] = [
+        'url' => 'civicrm/payment',
+        'title' => ts('Record Refund'),
+        'accessKey' => '',
+        'ref' => '',
+        'name' => '',
+        'qs' => [
+          'action' => 'add',
+          'reset' => 1,
+          'id' => $id,
+          'is_refund' => 1,
+        ],
+        'extra' => '',
+      ];
+    }
     return $actionLinks;
   }
 
@@ -4370,30 +4386,29 @@ LIMIT 1;";
     }
     $startDate = "$year$monthDay";
     $endDate = "$nextYear$monthDay";
-
-    $whereClauses = [
-      'contact_id' => 'IN (' . $contactIDs . ')',
-      'is_test' => ' = 0',
-      'receive_date' => ['>=' . $startDate, '<  ' . $endDate],
-    ];
     $havingClause = 'contribution_status_id = ' . (int) CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'contribution_status_id', 'Completed');
-    CRM_Financial_BAO_FinancialType::addACLClausesToWhereClauses($whereClauses);
+
+    $contributionBAO = new CRM_Contribute_BAO_Contribution();
+    $whereClauses = $contributionBAO->addSelectWhereClause();
 
     $clauses = [];
     foreach ($whereClauses as $key => $clause) {
-      $clauses[] = 'b.' . $key . " " . implode(' AND b.' . $key, (array) $clause);
+      $clauses[] = 'b.' . $key . ' ' . implode(' AND b.' . $key . ' ', (array) $clause);
     }
+    $clauses[] = 'b.contact_id IN (' . $contactIDs . ')';
+    $clauses[] = 'b.is_test = 0';
+    $clauses[] = 'b.receive_date >=' . $startDate . ' AND b.receive_date < ' . $endDate;
     $whereClauseString = implode(' AND ', $clauses);
 
     // See https://github.com/civicrm/civicrm-core/pull/13512 for discussion of how
     // this group by + having on contribution_status_id improves performance
-    $query = "
+    $query = '
       SELECT COUNT(*) as count,
              SUM(total_amount) as amount,
              AVG(total_amount) as average,
              currency
       FROM civicrm_contribution b
-      WHERE " . $whereClauseString . "
+      WHERE ' . $whereClauseString . "
       GROUP BY currency, contribution_status_id
       HAVING $havingClause
       ";
