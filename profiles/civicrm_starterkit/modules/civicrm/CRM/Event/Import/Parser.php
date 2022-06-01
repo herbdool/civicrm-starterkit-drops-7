@@ -61,7 +61,7 @@ abstract class CRM_Event_Import_Parser extends CRM_Import_Parser {
   public function run(
     $fileName,
     $separator,
-    &$mapper,
+    $mapper,
     $skipColumnHeader = FALSE,
     $mode = self::MODE_PREVIEW,
     $contactType = self::CONTACT_INDIVIDUAL,
@@ -195,10 +195,6 @@ abstract class CRM_Event_Import_Parser extends CRM_Import_Parser {
       }
 
       if ($returnCode & self::DUPLICATE) {
-        if ($returnCode & self::MULTIPLE_DUPE) {
-          /* TODO: multi-dupes should be counted apart from singles
-           * on non-skip action */
-        }
         $this->_duplicateCount++;
         $recordNumber = $this->_lineCount;
         if ($this->_haveColumnHeader) {

@@ -280,14 +280,14 @@ class CRM_Contribute_Form_Contribution extends CRM_Contribute_Form_AbstractEditP
       $this->assignPremiumProduct($this->_id);
       $this->buildValuesAndAssignOnline_Note_Type($this->_id, $this->_values);
     }
+    if (!isset($this->_values['is_template'])) {
+      $this->_values['is_template'] = FALSE;
+    }
+    $this->assign('is_template', $this->_values['is_template']);
 
     // when custom data is included in this page
     if (!empty($_POST['hidden_custom'])) {
       $this->applyCustomData('Contribution', $this->getFinancialTypeID(), $this->_id);
-    }
-
-    if (!empty($this->_values['is_template'])) {
-      $this->assign('is_template', TRUE);
     }
 
     $this->_lineItems = [];
@@ -608,9 +608,9 @@ class CRM_Contribute_Form_Contribution extends CRM_Contribute_Form_AbstractEditP
     $this->assign('allPanes', $allPanes);
 
     $this->addFormRule(['CRM_Contribute_Form_Contribution', 'formRule'], $this);
+    $this->assign('formType', $this->_formType);
 
     if ($this->_formType) {
-      $this->assign('formType', $this->_formType);
       return;
     }
 
@@ -2052,7 +2052,7 @@ class CRM_Contribute_Form_Contribution extends CRM_Contribute_Form_AbstractEditP
       return CRM_Contribute_BAO_Contribution_Utils::getPendingCompleteFailedAndCancelledStatuses();
     }
     $statusNames = CRM_Contribute_BAO_Contribution::buildOptions('contribution_status_id', 'validate');
-    $statusNamesToUnset = [
+    $statusNamesToUnset = array_diff([
       // For records which represent a data template for a recurring
       // contribution that may not yet have a payment. This status should not
       // be available from forms. 'Template' contributions should only be created
@@ -2060,15 +2060,15 @@ class CRM_Contribute_Form_Contribution extends CRM_Contribute_Form_AbstractEditP
       // is_template field set to 1. This status excludes them from reports
       // that are still ignorant of the is_template field.
       'Template',
-    ];
+      'Partially paid',
+      'Pending refund',
+    ], [$this->getPreviousContributionStatus()]);
     switch ($this->getPreviousContributionStatus()) {
       case 'Completed':
         // [CRM-17498] Removing unsupported status change options.
         $statusNamesToUnset = array_merge($statusNamesToUnset, [
           'Pending',
           'Failed',
-          'Partially paid',
-          'Pending refund',
         ]);
         break;
 
