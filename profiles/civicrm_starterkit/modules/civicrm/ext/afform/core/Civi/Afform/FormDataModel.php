@@ -13,7 +13,12 @@ use Civi\Api4\Afform;
  */
 class FormDataModel {
 
-  protected $defaults = ['security' => 'RBAC', 'actions' => ['create' => TRUE, 'update' => TRUE]];
+  protected $defaults = [
+    'security' => 'RBAC',
+    'actions' => ['create' => TRUE, 'update' => TRUE],
+    'min' => 1,
+    'max' => 1,
+  ];
 
   /**
    * @var array[]
@@ -45,7 +50,7 @@ class FormDataModel {
       $this->entities[$entity]['fields'] = $this->entities[$entity]['joins'] = [];
     }
     // Pre-load full list of afforms in case this layout embeds other afform directives
-    $this->blocks = (array) Afform::get()->setCheckPermissions(FALSE)->setSelect(['name', 'directive_name'])->execute()->indexBy('directive_name');
+    $this->blocks = (array) Afform::get(FALSE)->setSelect(['name', 'directive_name'])->execute()->indexBy('directive_name');
     $this->parseFields($layout);
   }
 
@@ -136,9 +141,14 @@ class FormDataModel {
       if (!is_array($node) || !isset($node['#tag'])) {
         continue;
       }
-      elseif (isset($node['af-fieldset']) && !empty($node['#children'])) {
-        $searchDisplay = $node['af-fieldset'] ? NULL : $this->findSearchDisplay($node);
-        $this->parseFields($node['#children'], $node['af-fieldset'], $join, $searchDisplay);
+      elseif (isset($node['af-fieldset'])) {
+        $entity = $node['af-fieldset'] ?? NULL;
+        $searchDisplay = $entity ? NULL : $this->findSearchDisplay($node);
+        if ($entity && isset($node['af-repeat'])) {
+          $this->entities[$entity]['min'] = $node['min'] ?? 0;
+          $this->entities[$entity]['max'] = $node['max'] ?? NULL;
+        }
+        $this->parseFields($node['#children'] ?? [], $node['af-fieldset'], $join, $searchDisplay);
       }
       elseif ($searchDisplay && $node['#tag'] === 'af-field') {
         $this->searchDisplays[$searchDisplay]['fields'][$node['name']] = AHQ::getProps($node);
@@ -161,7 +171,7 @@ class FormDataModel {
       // Recurse into embedded blocks
       if (isset($this->blocks[$node['#tag']])) {
         if (!isset($this->blocks[$node['#tag']]['layout'])) {
-          $this->blocks[$node['#tag']] = Afform::get()->setCheckPermissions(FALSE)->setSelect(['name', 'layout'])->addWhere('name', '=', $this->blocks[$node['#tag']]['name'])->execute()->first();
+          $this->blocks[$node['#tag']] = Afform::get(FALSE)->setSelect(['name', 'layout'])->addWhere('name', '=', $this->blocks[$node['#tag']]['name'])->execute()->first();
         }
         if (!empty($this->blocks[$node['#tag']]['layout'])) {
           $this->parseFields($this->blocks[$node['#tag']]['layout'], $entity, $join, $searchDisplay);

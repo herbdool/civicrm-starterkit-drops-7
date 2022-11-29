@@ -1,6 +1,7 @@
 <?php
 
 require_once 'search_kit.civix.php';
+use CRM_Search_ExtensionUtil as E;
 
 /**
  * Implements hook_civicrm_config().
@@ -21,6 +22,18 @@ function search_kit_civicrm_container($container) {
       'civi.api4.authorizeRecord::SavedSearch',
       ['CRM_Search_BAO_SearchDisplay', 'savedSearchCheckAccessByDisplay'],
     ]);
+}
+
+/**
+ * Implements hook_civicrm_permission().
+ *
+ * Define SearchKit permissions.
+ */
+function search_kit_civicrm_permission(&$permissions) {
+  $permissions['administer search_kit'] = [
+    E::ts('Search Kit: edit and delete searches'),
+    E::ts('Gives non-admin users access to the Search Kit UI to create, update and delete searches and displays'),
+  ];
 }
 
 /**
@@ -90,5 +103,16 @@ function search_kit_civicrm_pre($op, $entity, $id, &$params) {
     \Civi\Api4\SearchDisplay::delete(FALSE)
       ->addWhere('saved_search_id', '=', $id)
       ->execute();
+  }
+}
+
+/**
+ * Implements hook_civicrm_post().
+ */
+function search_kit_civicrm_post($op, $entity, $id, $object) {
+  // Flush fieldSpec cache when saving a SearchSegment
+  if ($entity === 'SearchSegment') {
+    \Civi::$statics['all_search_segments'] = NULL;
+    \Civi::cache('metadata')->clear();
   }
 }

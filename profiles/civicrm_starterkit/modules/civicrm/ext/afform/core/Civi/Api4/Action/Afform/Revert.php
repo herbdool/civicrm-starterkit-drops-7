@@ -3,6 +3,7 @@
 namespace Civi\Api4\Action\Afform;
 
 use Civi\Api4\Generic\Result;
+use CRM_Afform_ExtensionUtil as E;
 
 /**
  * @inheritDoc
@@ -32,8 +33,7 @@ class Revert extends \Civi\Api4\Generic\BasicBatchAction {
     _afform_clear();
 
     if ($this->flushManaged) {
-      // FIXME: more targeted reconciliation
-      \CRM_Core_ManagedEntities::singleton()->reconcile();
+      \CRM_Core_ManagedEntities::singleton()->reconcile(E::LONG_NAME);
     }
     if ($this->flushMenu) {
       \CRM_Core_Menu::store();
@@ -57,7 +57,7 @@ class Revert extends \Civi\Api4\Generic\BasicBatchAction {
       $metaPath = $scanner->createSiteLocalPath($item['name'], $file);
       if (file_exists($metaPath)) {
         if (!@unlink($metaPath)) {
-          throw new \API_Exception("Failed to remove afform overrides in $file");
+          throw new \CRM_Core_Exception("Failed to remove afform overrides in $file");
         }
       }
     }

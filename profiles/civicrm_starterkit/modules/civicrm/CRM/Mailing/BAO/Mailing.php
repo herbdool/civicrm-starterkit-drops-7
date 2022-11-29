@@ -666,7 +666,7 @@ class CRM_Mailing_BAO_Mailing extends CRM_Mailing_DAO_Mailing {
       }
 
       // To check for an html part strip tags
-      if (trim(strip_tags($this->body_html, '<img>'))) {
+      if (trim(strip_tags(($this->body_html ?? ''), '<img>'))) {
 
         $template = [];
         if ($this->header) {
@@ -1163,11 +1163,7 @@ ORDER BY   civicrm_email.is_bulkmail DESC
     }
 
     $mailParams = $headers;
-    if ($text && ($test || $contact['preferred_mail_format'] == 'Text' ||
-        $contact['preferred_mail_format'] == 'Both' ||
-        ($contact['preferred_mail_format'] == 'HTML' && !array_key_exists('html', $pEmails))
-      )
-    ) {
+    if ($text) {
       $textBody = implode('', $text);
       if ($useSmarty) {
         $textBody = $smarty->fetch("string:$textBody");
@@ -1175,10 +1171,7 @@ ORDER BY   civicrm_email.is_bulkmail DESC
       $mailParams['text'] = $textBody;
     }
 
-    if ($html && ($test || ($contact['preferred_mail_format'] == 'HTML' ||
-          $contact['preferred_mail_format'] == 'Both'
-        ))
-    ) {
+    if ($html) {
       $htmlBody = implode('', $html);
       if ($useSmarty) {
         $htmlBody = $smarty->fetch("string:$htmlBody");
@@ -1419,74 +1412,62 @@ ORDER BY   civicrm_email.is_bulkmail DESC
     if (!isset($this->id)) {
       return [];
     }
-    $mg = new CRM_Mailing_DAO_MailingGroup();
-    $mgtable = CRM_Mailing_DAO_MailingGroup::getTableName();
-    $group = CRM_Contact_BAO_Group::getTableName();
 
-    $mg->query("SELECT      $group.title as name FROM $mgtable
-                    INNER JOIN  $group ON $mgtable.entity_id = $group.id
-                    WHERE       $mgtable.mailing_id = {$this->id}
-                        AND     $mgtable.entity_table = '$group'
-                        AND     $mgtable.group_type = 'Include'
-                    ORDER BY    $group.name");
+    /*
+    This bypasses permissions to maintain compatibility with the SQL it replaced.  This should ideally not bypass
+    permissions in the future, but it's called by some extensions during mail processing, when cron isn't necessarily
+    called with a logged-in user.
+     */
+    $mailingGroups = \Civi\Api4\MailingGroup::get(FALSE)
+      ->addSelect('group.title', 'group.frontend_title')
+      ->addJoin('Group AS group', 'LEFT', ['entity_id', '=', 'group.id'])
+      ->addWhere('mailing_id', '=', $this->id)
+      ->addWhere('entity_table', '=', 'civicrm_group')
+      ->addWhere('group_type', '=', 'Include')
+      ->execute();
 
-    $groups = [];
-    while ($mg->fetch()) {
-      $groups[] = $mg->name;
+    $groupNames = [];
+
+    foreach ($mailingGroups as $mg) {
+      $name = $mg['group.frontend_title'] ?? $mg['group.title'];
+      if ($name) {
+        $groupNames[] = $name;
+      }
     }
-    return $groups;
+
+    return $groupNames;
   }
 
   /**
    * Add the mailings.
    *
    * @param array $params
-   *   Reference array contains the values submitted by the form.
-   * @param array $ids
-   *   Reference array contains the id.
-   *
    *
    * @return CRM_Mailing_DAO_Mailing
    * @throws \Civi\API\Exception\UnauthorizedException
    */
-  public static function add(&$params, $ids = []) {
-    $id = $params['id'] ?? $ids['mailing_id'] ?? NULL;
+  public static function add($params) {
+    $id = $params['id'] ?? NULL;
 
-    if (empty($params['id']) && !empty($ids)) {
-      CRM_Core_Error::deprecatedWarning('Parameter $ids is no longer used by Mailing::add. Use the api or just pass $params');
-    }
     if (!empty($params['check_permissions']) && CRM_Mailing_Info::workflowEnabled()) {
       $params = self::processWorkflowPermissions($params);
     }
-    $action = $id ? 'create' : 'edit';
-    CRM_Utils_Hook::pre($action, 'Mailing', $id, $params);
-
-    $mailing = new static();
-    if ($id) {
-      $mailing->id = $id;
-      $mailing->find(TRUE);
+    if (!$id) {
+      $params['domain_id'] = $params['domain_id'] ?? CRM_Core_Config::domainID();
     }
-    $mailing->domain_id = CRM_Utils_Array::value('domain_id', $params, CRM_Core_Config::domainID());
-
-    if (((!$id && empty($params['replyto_email'])) || !isset($params['replyto_email'])) &&
+    if (
+      ((!$id && empty($params['replyto_email'])) || !isset($params['replyto_email'])) &&
       isset($params['from_email'])
     ) {
       $params['replyto_email'] = $params['from_email'];
     }
-    $mailing->copyValues($params);
-
     // CRM-20892 Unset Modifed Date here so that MySQL can correctly set an updated modfied date.
-    unset($mailing->modified_date);
-    $result = $mailing->save();
+    unset($params['modified_date']);
+
+    $result = static::writeRecord($params);
 
     // CRM-20892 Re find record after saing so we can set the updated modified date in the result.
-    $mailing->find(TRUE);
-
-    if (isset($mailing->modified_date)) {
-      $result->modified_date = $mailing->modified_date;
-    }
-
-    CRM_Utils_Hook::post($action, 'Mailing', $mailing->id, $mailing);
+    $result->find(TRUE);
 
     return $result;
   }
@@ -1517,7 +1498,6 @@ ORDER BY   civicrm_email.is_bulkmail DESC
    *   $mailing      The new mailing object
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public static function create(array $params) {
 
@@ -1579,7 +1559,7 @@ ORDER BY   civicrm_email.is_bulkmail DESC
       if (empty($defaults['from_email'])) {
         $defaultAddress = CRM_Core_BAO_Domain::getNameAndEmail(TRUE, TRUE);
         foreach ($defaultAddress as $id => $value) {
-          if (preg_match('/"(.*)" <(.*)>/', $value, $match)) {
+          if (preg_match('/"(.*)" <(.*)>/', ($value ?? ''), $match)) {
             $defaults['from_email'] = $match[2];
             $defaults['from_name'] = $match[1];
           }
@@ -1713,7 +1693,7 @@ ORDER BY   civicrm_email.is_bulkmail DESC
    * @param string $entity
    *   'groups' or 'mailings'.
    * @param array $entityIds
-   * @throws CiviCRM_API3_Exception
+   * @throws CRM_Core_Exception
    */
   public static function replaceGroups($mailingId, $type, $entity, $entityIds) {
     $values = [];

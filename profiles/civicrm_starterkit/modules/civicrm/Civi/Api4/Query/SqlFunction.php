@@ -59,7 +59,7 @@ abstract class SqlFunction extends SqlExpression {
           continue;
         }
         if (!$prefix && !$param['optional']) {
-          throw new \API_Exception("Missing param $name for SQL function " . static::getName());
+          throw new \CRM_Core_Exception("Missing param $name for SQL function " . static::getName());
         }
       }
       elseif ($param['flag_before']) {
@@ -76,7 +76,7 @@ abstract class SqlFunction extends SqlExpression {
           count($exprs) < $param['min_expr'] &&
           !(!$exprs && $param['optional'])
         ) {
-          throw new \API_Exception("Too few arguments to param $name for SQL function " . static::getName());
+          throw new \CRM_Core_Exception("Too few arguments to param $name for SQL function " . static::getName());
         }
         $this->args[$idx]['expr'] = $exprs;
 
@@ -84,7 +84,7 @@ abstract class SqlFunction extends SqlExpression {
       }
     }
     if (trim($arg)) {
-      throw new \API_Exception("Too many arguments given for SQL function " . static::getName());
+      throw new \CRM_Core_Exception("Too many arguments given for SQL function " . static::getName());
     }
   }
 
@@ -106,13 +106,13 @@ abstract class SqlFunction extends SqlExpression {
   /**
    * Render the expression for insertion into the sql query
    *
-   * @param array $fieldList
+   * @param Civi\Api4\Query\Api4SelectQuery $query
    * @return string
    */
-  public function render(array $fieldList): string {
+  public function render(Api4SelectQuery $query): string {
     $output = '';
     foreach ($this->args as $arg) {
-      $rendered = $this->renderArg($arg, $fieldList);
+      $rendered = $this->renderArg($arg, $query);
       if (strlen($rendered)) {
         $output .= (strlen($output) ? ' ' : '') . $rendered;
       }
@@ -122,16 +122,16 @@ abstract class SqlFunction extends SqlExpression {
 
   /**
    * @param array $arg
-   * @param array $fieldList
+   * @param Civi\Api4\Query\Api4SelectQuery $query
    * @return string
    */
-  private function renderArg($arg, $fieldList): string {
+  private function renderArg($arg, Api4SelectQuery $query): string {
     $rendered = implode(' ', $arg['prefix']);
     foreach ($arg['expr'] ?? [] as $idx => $expr) {
       if (strlen($rendered) || $idx) {
         $rendered .= $idx ? ', ' : ' ';
       }
-      $rendered .= $expr->render($fieldList);
+      $rendered .= $expr->render($query);
     }
     if ($arg['suffix']) {
       $rendered .= (strlen($rendered) ? ' ' : '') . implode(' ', $arg['suffix']);
@@ -163,7 +163,7 @@ abstract class SqlFunction extends SqlExpression {
     $params = [];
     foreach (static::params() as $param) {
       // Merge in defaults to ensure each param has these properties
-      $params[] = $param + [
+      $param += [
         'name' => NULL,
         'label' => ts('Select'),
         'min_expr' => 1,
@@ -174,6 +174,10 @@ abstract class SqlFunction extends SqlExpression {
         'must_be' => ['SqlField', 'SqlFunction', 'SqlString', 'SqlNumber', 'SqlNull'],
         'api_default' => NULL,
       ];
+      if (!$param['max_expr']) {
+        $param['must_be'] = [];
+      }
+      $params[] = $param;
     }
     return $params;
   }

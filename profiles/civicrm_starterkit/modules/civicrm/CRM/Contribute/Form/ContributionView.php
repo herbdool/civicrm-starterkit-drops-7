@@ -26,13 +26,18 @@ class CRM_Contribute_Form_ContributionView extends CRM_Core_Form {
    * Set variables up before form is built.
    *
    * @throws \CRM_Core_Exception
-   * @throws \API_Exception
    */
   public function preProcess() {
     $id = $this->getID();
 
     // Check permission for action.
-    if (!CRM_Core_Permission::checkActionPermission('CiviContribute', $this->_action)) {
+    $actionMapping = [
+      CRM_Core_Action::VIEW => 'get',
+      CRM_Core_Action::ADD => 'create',
+      CRM_Core_Action::UPDATE => 'update',
+      CRM_Core_Action::DELETE => 'delete',
+    ];
+    if (!$this->isHasAccess($actionMapping[$this->_action])) {
       CRM_Core_Error::statusBounce(ts('You do not have permission to access this page.'));
     }
     $params = ['id' => $id];
@@ -115,7 +120,7 @@ class CRM_Contribute_Form_ContributionView extends CRM_Core_Form {
         ->addWhere('contribution_id', '=', $id)
         ->execute();
     }
-    catch (API_Exception $e) {
+    catch (CRM_Core_Exception $e) {
       // likely don't have permission for events/participants
       $participantLineItems = [];
     }
@@ -374,7 +379,7 @@ class CRM_Contribute_Form_ContributionView extends CRM_Core_Form {
         ->addValue('id', $this->getID())
         ->execute()->first()['access'];
     }
-    catch (API_Exception $e) {
+    catch (CRM_Core_Exception $e) {
       return FALSE;
     }
   }

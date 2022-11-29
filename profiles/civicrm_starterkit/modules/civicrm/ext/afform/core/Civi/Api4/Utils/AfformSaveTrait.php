@@ -2,6 +2,8 @@
 
 namespace Civi\Api4\Utils;
 
+use CRM_Afform_ExtensionUtil as E;
+
 /**
  * Class AfformSaveTrait
  * @package Civi\Api4\Action\Afform
@@ -29,7 +31,7 @@ trait AfformSaveTrait {
       $orig = NULL;
     }
     elseif (!preg_match('/^[a-zA-Z][-_a-zA-Z0-9]*$/', $item['name'])) {
-      throw new \API_Exception("Afform.{$this->getActionName()}: name should begin with a letter and only contain alphanumerics underscores and dashes.");
+      throw new \CRM_Core_Exception("Afform.{$this->getActionName()}: name should begin with a letter and only contain alphanumerics underscores and dashes.");
     }
     else {
       // Fetch existing metadata
@@ -65,13 +67,16 @@ trait AfformSaveTrait {
       return ($item[$field] ?? NULL) !== ($orig[$field] ?? NULL);
     };
 
-    // If the dashlet setting changed, managed entities must be reconciled
+    // If the dashlet or navigation setting changed, managed entities must be reconciled
+    // TODO: If this list of conditions gets any longer, then
+    // maybe we should unconditionally reconcile and accept the small performance drag.
     if (
       $isChanged('is_dashlet') ||
-      (!empty($meta['is_dashlet']) && $isChanged('title'))
+      $isChanged('navigation') ||
+      (!empty($meta['is_dashlet']) && $isChanged('title')) ||
+      (!empty($meta['navigation']) && ($isChanged('title') || $isChanged('permission') || $isChanged('icon') || $isChanged('server_route')))
     ) {
-      // FIXME: more targeted reconciliation
-      \CRM_Core_ManagedEntities::singleton()->reconcile();
+      \CRM_Core_ManagedEntities::singleton()->reconcile(E::LONG_NAME);
     }
 
     // Right now, permission-checks are completely on-demand.

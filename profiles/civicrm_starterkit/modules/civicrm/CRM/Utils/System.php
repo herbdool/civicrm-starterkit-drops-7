@@ -38,6 +38,7 @@
  * @method static array synchronizeUsers() Create CRM contacts for all existing CMS users.
  * @method static void appendCoreResources(\Civi\Core\Event\GenericHookEvent $e) Callback for hook_civicrm_coreResourceList.
  * @method static void alterAssetUrl(\Civi\Core\Event\GenericHookEvent $e) Callback for hook_civicrm_getAssetUrl.
+ * @method static exitAfterFatal() Should the current execution exit after a fatal error?
  */
 class CRM_Utils_System {
 
@@ -125,7 +126,7 @@ class CRM_Utils_System {
       for ($i = 0, $cnt = count($qs); $i < $cnt; $i++) {
         // check first if exist a pair
         if (strstr($qs[$i], '=') !== FALSE) {
-          list($name, $value) = explode('=', $qs[$i]);
+          [$name, $value] = explode('=', $qs[$i]);
           if ($name != $urlVar) {
             $name = rawurldecode($name);
             // check for arrays in parameters: site.php?foo[]=1&foo[]=2&foo[]=3
@@ -206,13 +207,13 @@ class CRM_Utils_System {
    *
    * @param array|string $query
    *
-   * @return string
+   * @return string|null
    */
   public static function makeQueryString($query) {
     if (is_array($query)) {
       $buf = '';
       foreach ($query as $key => $value) {
-        $buf .= ($buf ? '&' : '') . urlencode($key) . '=' . urlencode($value);
+        $buf .= ($buf ? '&' : '') . urlencode($key ?? '') . '=' . urlencode($value ?? '');
       }
       $query = $buf;
     }
@@ -243,14 +244,18 @@ class CRM_Utils_System {
    *   An HTML string containing a link to the given path.
    */
   public static function url(
-    $path = NULL,
-    $query = NULL,
+    $path = '',
+    $query = '',
     $absolute = FALSE,
     $fragment = NULL,
     $htmlize = TRUE,
     $frontend = FALSE,
     $forceBackend = FALSE
   ) {
+    // handle legacy null params
+    $path = $path ?? '';
+    $query = $query ?? '';
+
     $query = self::makeQueryString($query);
 
     // Legacy handling for when the system passes around html escaped strings
@@ -260,15 +265,15 @@ class CRM_Utils_System {
 
     // Extract fragment from path or query if munged together
     if ($query && strstr($query, '#')) {
-      list($path, $fragment) = explode('#', $query);
+      [$path, $fragment] = explode('#', $query);
     }
     if ($path && strstr($path, '#')) {
-      list($path, $fragment) = explode('#', $path);
+      [$path, $fragment] = explode('#', $path);
     }
 
     // Extract query from path if munged together
     if ($path && strstr($path, '?')) {
-      list($path, $extraQuery) = explode('?', $path);
+      [$path, $extraQuery] = explode('?', $path);
       $query = $extraQuery . ($query ? "&$query" : '');
     }
 
@@ -718,7 +723,7 @@ class CRM_Utils_System {
     }
     elseif ($storeInSession) {
       // lets store contact id and user id in session
-      list($userID, $ufID, $randomNumber) = $result;
+      [$userID, $ufID, $randomNumber] = $result;
       if ($userID && $ufID) {
         $config = CRM_Core_Config::singleton();
         $config->userSystem->setUserSession([$userID, $ufID]);
@@ -752,18 +757,6 @@ class CRM_Utils_System {
    */
   public static function authenticate($name, $password, $loadCMSBootstrap = FALSE, $realPath = NULL) {
     $config = CRM_Core_Config::singleton();
-
-    /* Before we do any loading, let's start the session and write to it.
-     * We typically call authenticate only when we need to bootstrap the CMS
-     * directly via Civi and hence bypass the normal CMS auth and bootstrap
-     * process typically done in CLI and cron scripts. See: CRM-12648
-     *
-     * Q: Can we move this to the userSystem class so that it can be tuned
-     * per-CMS? For example, when dealing with UnitTests UF, does it need to
-     * do this session write since the original issue was for Drupal.
-     */
-    $session = CRM_Core_Session::singleton();
-    $session->set('civicrmInitSession', TRUE);
 
     return $config->userSystem->authenticate($name, $password, $loadCMSBootstrap, $realPath);
   }
@@ -816,7 +809,7 @@ class CRM_Utils_System {
    *   The obscured credit card number.
    */
   public static function mungeCreditCard($number, $keep = 4) {
-    $number = trim($number);
+    $number = trim($number ?? '');
     if (empty($number)) {
       return NULL;
     }
@@ -1002,7 +995,7 @@ class CRM_Utils_System {
 
     if (!array_key_exists($callback, self::$_callbacks)) {
       if (strpos($callback, '::') !== FALSE) {
-        list($className, $methodName) = explode('::', $callback);
+        [$className, $methodName] = explode('::', $callback);
         $fileName = str_replace('_', DIRECTORY_SEPARATOR, $className) . '.php';
         // ignore errors if any
         @include_once $fileName;
@@ -1041,7 +1034,7 @@ class CRM_Utils_System {
    * @return string[]
    */
   public static function explode($separator, $string, $limit) {
-    $result = explode($separator, $string, $limit);
+    $result = explode($separator, ($string ?? ''), $limit);
     for ($i = count($result); $i < $limit; $i++) {
       $result[$i] = NULL;
     }
@@ -1178,7 +1171,7 @@ class CRM_Utils_System {
    * @return string
    */
   public static function majorVersion() {
-    list($a, $b) = explode('.', self::version());
+    [$a, $b] = explode('.', self::version());
     return "$a.$b";
   }
 
@@ -1498,13 +1491,7 @@ class CRM_Utils_System {
     // a bit aggressive, but livable for now
     CRM_Utils_Cache::singleton()->flush();
 
-    // Traditionally, systems running on memory-backed caches were quite
-    // zealous about destroying *all* memory-backed caches during a flush().
-    // These flushes simulate that legacy behavior. However, they should probably
-    // be removed at some point.
-    $localDrivers = ['CRM_Utils_Cache_ArrayCache', 'CRM_Utils_Cache_NoCache'];
-    if (Civi\Core\Container::isContainerBooted()
-      && !in_array(get_class(CRM_Utils_Cache::singleton()), $localDrivers)) {
+    if (Civi\Core\Container::isContainerBooted()) {
       Civi::cache('long')->flush();
       Civi::cache('settings')->flush();
       Civi::cache('js_strings')->flush();
@@ -1514,6 +1501,7 @@ class CRM_Utils_System {
       Civi::cache('customData')->flush();
       Civi::cache('contactTypes')->clear();
       Civi::cache('metadata')->clear();
+      \Civi\Core\ClassScanner::cache('index')->flush();
       CRM_Extension_System::singleton()->getCache()->flush();
       CRM_Cxn_CiviCxnHttp::singleton()->getCache()->flush();
     }
@@ -1847,7 +1835,7 @@ class CRM_Utils_System {
         '{sid}' => self::getSiteID(),
         '{baseUrl}' => $config->userFrameworkBaseURL,
         '{lang}' => $tsLocale,
-        '{co}' => $config->defaultContactCountry,
+        '{co}' => $config->defaultContactCountry ?? '',
       ];
       return strtr($url, array_map('urlencode', $vars));
     }

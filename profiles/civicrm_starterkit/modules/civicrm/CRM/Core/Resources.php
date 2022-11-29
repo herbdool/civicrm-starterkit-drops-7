@@ -167,7 +167,7 @@ class CRM_Core_Resources implements CRM_Core_Resources_CollectionAdderInterface 
    * @see CRM_Core_Resources_CollectionTrait::findCreateSettingSnippet()
    */
   public function &findCreateSettingSnippet($options = []): array {
-    $options = CRM_Core_Resources_CollectionAdderTrait::mergeSettingOptions($options, [
+    $options = self::mergeSettingOptions($options, [
       'region' => NULL,
     ]);
     return $this->getSettingRegion($options['region'])->findCreateSettingSnippet($options);
@@ -307,7 +307,7 @@ class CRM_Core_Resources implements CRM_Core_Resources_CollectionAdderInterface 
    *   List of matching files, relative to the extension base dir.
    * @see glob()
    */
-  public function glob($ext, $patterns, $flags = NULL) {
+  public function glob($ext, $patterns, $flags = 0) {
     $path = $this->getPath($ext);
     $patterns = (array) $patterns;
     $files = [];
@@ -449,7 +449,7 @@ class CRM_Core_Resources implements CRM_Core_Resources_CollectionAdderInterface 
     ) {
       return TRUE;
     }
-    list($arg0, $arg1) = array_pad(explode('/', CRM_Utils_System::currentPath()), 2, '');
+    [$arg0, $arg1] = array_pad(explode('/', (CRM_Utils_System::currentPath() ?? '')), 2, '');
     return ($arg0 === 'civicrm' && in_array($arg1, ['ajax', 'angularprofiles', 'asset']));
   }
 
@@ -504,7 +504,7 @@ class CRM_Core_Resources implements CRM_Core_Resources_CollectionAdderInterface 
 
     foreach (CRM_Core_DAO_AllCoreTables::daoToClass() as $entity => $daoName) {
       // Skip DAOs of disabled components
-      if (defined("$daoName::COMPONENT") && !CRM_Core_Component::isEnabled($daoName::COMPONENT)) {
+      if (!$daoName::isComponentEnabled()) {
         continue;
       }
       $baoName = str_replace('_DAO_', '_BAO_', $daoName);

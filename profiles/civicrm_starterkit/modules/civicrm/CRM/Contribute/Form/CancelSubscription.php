@@ -100,8 +100,16 @@ class CRM_Contribute_Form_CancelSubscription extends CRM_Contribute_Form_Contrib
     $this->setTitle($this->_mid ? ts('Cancel Auto-renewal') : ts('Cancel Recurring Contribution'));
     $this->assign('mode', $this->_mode);
 
+    if ($this->isSelfService() || !$this->_paymentProcessorObj->supports('cancelRecurring')) {
+      // If we are self service (contact is cancelling for themselves via a cancel link)
+      // or the processor does not support cancellation then remove the fields
+      // specifying whether to notify the processor.
+      unset($this->entityFields['send_cancel_request']);
+    }
     if ($this->isSelfService()) {
-      unset($this->entityFields['send_cancel_request'], $this->entityFields['is_notify']);
+      // Arguably the is_notify field should be removed in self-service mode.
+      // Historically this has been the case...
+      unset($this->entityFields['is_notify']);
     }
 
     if ($this->getSubscriptionDetails()->contact_id) {
@@ -187,7 +195,6 @@ class CRM_Contribute_Form_CancelSubscription extends CRM_Contribute_Form_Contrib
    * Process the form submission.
    *
    * @throws \CRM_Core_Exception
-   * @throws \API_Exception
    */
   public function postProcess() {
     $message = NULL;
@@ -255,7 +262,7 @@ class CRM_Contribute_Form_CancelSubscription extends CRM_Contribute_Form_Contrib
         $sendTemplateParams
           = [
             'groupName' => $this->_mode == 'auto_renew' ? 'msg_tpl_workflow_membership' : 'msg_tpl_workflow_contribution',
-            'valueName' => $this->_mode == 'auto_renew' ? 'membership_autorenew_cancelled' : 'contribution_recurring_cancelled',
+            'workflow' => $this->_mode == 'auto_renew' ? 'membership_autorenew_cancelled' : 'contribution_recurring_cancelled',
             'contactId' => $this->getSubscriptionDetails()->contact_id,
             'tplParams' => $tplParams,
             'tokenContext' => ['contribution_recurId' => $this->getContributionRecurID()],
@@ -268,7 +275,7 @@ class CRM_Contribute_Form_CancelSubscription extends CRM_Contribute_Form_Contrib
         list($sent) = CRM_Core_BAO_MessageTemplate::sendTemplate($sendTemplateParams);
       }
     }
-    catch (CiviCRM_API3_Exception $e) {
+    catch (CRM_Core_Exception $e) {
       $msgType = 'error';
       $msgTitle = ts('Error');
       if ($params['send_cancel_request'] == 1) {

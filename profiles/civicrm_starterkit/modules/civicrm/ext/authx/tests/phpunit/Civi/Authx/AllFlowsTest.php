@@ -111,7 +111,7 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
    *   The type of credential to put in the `Authorization:` header.
    * @param string $flowType
    *   The "flow" determines how the credential is added on top of the base-request (e.g. adding a parameter or header).
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \GuzzleHttp\Exception\GuzzleException
    * @dataProvider getStatelessExamples
    */
@@ -128,7 +128,7 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
     // Phase 1: Request fails if this credential type is not enabled
     \Civi::settings()->set("authx_{$flowType}_cred", []);
     $response = $http->send($request);
-    $this->assertFailedDueToProhibition($response);
+    $this->assertNotAuthenticated($flowType === 'header' ? 'anon' : 'prohibit', $response);
 
     // Phase 2: Request succeeds if this credential type is enabled
     \Civi::settings()->set("authx_{$flowType}_cred", [$credType]);
@@ -146,7 +146,7 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
    *   The type of credential to put in the `Authorization:` header.
    * @param string $flowType
    *   The "flow" determines how the credential is added on top of the base-request (e.g. adding a parameter or header).
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \GuzzleHttp\Exception\GuzzleException
    * @dataProvider getStatelessExamples
    */
@@ -159,7 +159,7 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
     // Phase 1: Request fails if this credential type is not enabled
     \Civi::settings()->set("authx_{$flowType}_cred", []);
     $response = $http->send($request);
-    $this->assertFailedDueToProhibition($response);
+    $this->assertNotAuthenticated($flowType === 'header' ? 'anon' : 'prohibit', $response);
 
     // Phase 2: Request succeeds if this credential type is enabled
     \Civi::settings()->set("authx_{$flowType}_cred", [$credType]);
@@ -173,7 +173,7 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
   /**
    * The setting "authx_guard" may be used to require (or not require) the site_key.
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \GuzzleHttp\Exception\GuzzleException
    */
   public function testStatelessGuardSiteKey() {
@@ -215,7 +215,7 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
    *
    * @param string $credType
    *   The type of credential to put in the login request.
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \GuzzleHttp\Exception\GuzzleException
    * @dataProvider getCredTypes
    */
@@ -261,7 +261,7 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
    *
    * @param string $credType
    *   The type of credential to put in the login request.
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \GuzzleHttp\Exception\GuzzleException
    * @dataProvider getCredTypes
    */
@@ -283,7 +283,7 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
    *
    * @param string $credType
    *   The type of credential to put in the login request.
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \GuzzleHttp\Exception\GuzzleException
    * @dataProvider getCredTypes
    */
@@ -310,7 +310,7 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
    *
    * @param string $credType
    *   The type of credential to put in the login request.
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \GuzzleHttp\Exception\GuzzleException
    * @dataProvider getCredTypes
    */
@@ -331,7 +331,7 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
    * Create a session for $demoCID. Within the session, make a single
    * stateless request as $lebowskiCID.
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \GuzzleHttp\Exception\GuzzleException
    */
   public function testStatefulStatelessOverlap(): void {
@@ -366,10 +366,63 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
   }
 
   /**
+   * Suppose a deployment has two layers of authorization:
+   *
+   * (1) a generic/site-wide HTTP restriction (perhaps enforced by a reverse proxy)
+   * (2) anything/everything else (CMS/login-form/parameter/X-Civi-Auth stuff).
+   *
+   * Layer (1) has an `Authorization:` header that should be ignored by `authx`.
+   *
+   * This test submits both layer (1) and layer (2) credentials and ensures that authx respects
+   * the layer (2).
+   */
+  public function testIgnoredHeaderAuthorization() {
+    // We may submit some other credential - it will be used.
+    $flowType = 'param';
+    $credType = 'api_key';
+
+    \Civi::settings()->set("authx_header_cred", []);
+    \Civi::settings()->set("authx_{$flowType}_cred", [$credType]);
+
+    $http = $this->createGuzzle(['http_errors' => FALSE]);
+
+    // We submit both the irrelevant `Authorization:` and the relevant `?_authx=...` (DemoCID).
+    $request = $this->applyAuth($this->requestMyContact(), 'api_key', 'header', $this->getLebowskiCID());
+    $request = $this->applyAuth($request, $credType, $flowType, $this->getDemoCID());
+    // $request = $request->withAddedHeader('Authorization', $irrelevantAuthorization);
+    $response = $http->send($request);
+    $this->assertMyContact($this->getDemoCID(), $this->getDemoUID(), $credType, $flowType, $response);
+    if (!in_array('sendsExcessCookies', $this->quirks)) {
+      $this->assertNoCookies($response);
+    }
+  }
+
+  /**
+   * Similar to testIgnoredHeaderAuthorization(), but the Civi/CMS user is anonymous.
+   */
+  public function testIgnoredHeaderAuthorization_anon() {
+    $http = $this->createGuzzle(['http_errors' => FALSE]);
+
+    /** @var \Psr\Http\Message\RequestInterface $request */
+
+    // Variant 1: The `Authorization:` header is ignored (even if the content is totally fake/inauthentic).
+    \Civi::settings()->set("authx_header_cred", []);
+    $request = $this->requestMyContact()->withAddedHeader('Authorization', 'Basic ' . base64_encode("not:real"));
+    $response = $http->send($request);
+    $this->assertAnonymousContact($response);
+
+    // Variant 2: The `Authorization:` header is ignored (even if the content is sorta-real-ish for LebowskiCID).
+    \Civi::settings()->set("authx_header_cred", []);
+    $request = $this->applyAuth($this->requestMyContact(), 'api_key', 'header', $this->getLebowskiCID());
+    $response = $http->send($request);
+    $this->assertAnonymousContact($response);
+  }
+
+  /**
    * This consumer intends to make stateless requests with a handful of different identities,
    * but their browser happens to be cookie-enabled. Ensure that identities do not leak between requests.
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \GuzzleHttp\Exception\GuzzleException
    */
   public function testMultipleStateless(): void {
@@ -395,7 +448,7 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
         case 'A':
           $request = $this->requestMyContact();
           $response = $http->send($request);
-          $this->assertAnonymousContact($response);
+          $this->assertAnonymousContact($response, 'Expected Anonymous Contact in step #' . $i);
           $actualSteps .= 'A';
           break;
 
@@ -425,10 +478,12 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
    * different identifier fields (authx_user, authx_contact_id), and different
    * flows (param/header/xheader).
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \GuzzleHttp\Exception\GuzzleException
    */
   public function testJwtMiddleware() {
+    \Civi::settings()->revert("authx_param_cred");
+
     // HTTP GET with a specific user. Choose flow automatically.
     $response = $this->createGuzzle()->get('civicrm/authx/id', [
       'authx_user' => $GLOBALS['_CV']['DEMO_USER'],
@@ -463,7 +518,7 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
    *
    * To test this, we call `cv ev 'authx_login(...);'` and check the resulting identity.
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function testCliServiceLogin() {
     $withCv = function($phpStmt) {
@@ -604,8 +659,9 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
    * Assert the AJAX request provided empty contact information
    *
    * @param \Psr\Http\Message\ResponseInterface $response
+   * @param string $additionalMessage
    */
-  public function assertAnonymousContact(ResponseInterface $response): void {
+  public function assertAnonymousContact(ResponseInterface $response, $additionalMessage = ''): void {
     $formattedFailure = $this->formatFailure($response);
     $this->assertContentType('application/json', $response);
     $this->assertStatusCode(200, $response);
@@ -613,8 +669,8 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
     if (json_last_error() !== JSON_ERROR_NONE || empty($j)) {
       $this->fail('Malformed JSON' . $formattedFailure);
     }
-    $this->assertTrue(array_key_exists('contact_id', $j) && $j['contact_id'] === NULL, 'contact_id should be null' . $formattedFailure);
-    $this->assertTrue(array_key_exists('user_id', $j) && $j['user_id'] === NULL, 'user_id should be null' . $formattedFailure);
+    $this->assertTrue(array_key_exists('contact_id', $j) && $j['contact_id'] === NULL, 'contact_id should be null' . $formattedFailure . ' ' . $additionalMessage);
+    $this->assertTrue(array_key_exists('user_id', $j) && $j['user_id'] === NULL, 'user_id should be null' . $formattedFailure . ' ' . $additionalMessage);
   }
 
   /**
@@ -741,6 +797,28 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
   }
 
   /**
+   * Assert that a request was not authenticated.
+   *
+   * @param string $mode
+   *   Expect that the  'prohibited' or 'anon'
+   * @param \Psr\Http\Message\ResponseInterface $response
+   */
+  private function assertNotAuthenticated(string $mode, $response) {
+    switch ($mode) {
+      case 'anon':
+        $this->assertAnonymousContact($response);
+        break;
+
+      case 'prohibit':
+        $this->assertFailedDueToProhibition($response);
+        break;
+
+      default:
+        throw new \RuntimeException("Invalid option: mode=$mode");
+    }
+  }
+
+  /**
    * @param \Psr\Http\Message\ResponseInterface $response
    */
   private function assertFailedDueToProhibition($response): void {
@@ -778,19 +856,8 @@ class AllFlowsTest extends \PHPUnit\Framework\TestCase implements EndToEndInterf
   }
 
   /**
-   * @param $regexp
-   * @param \Psr\Http\Message\ResponseInterface $response
-   */
-  private function assertBodyRegexp($regexp, $response = NULL) {
-    $response = $this->resolveResponse($response);
-    $this->assertRegexp($regexp, (string) $response->getBody(),
-      'Response body does not match pattern' . $this->formatFailure($response));
-    return $this;
-  }
-
-  /**
    * @return int
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   private function getDemoCID(): int {
     if (!isset(\Civi::$statics[__CLASS__]['demoId'])) {

@@ -3,10 +3,10 @@
 namespace Civi\Api4\Action\SearchDisplay;
 
 use Civi\API\Exception\UnauthorizedException;
-use Civi\Api4\Generic\Traits\ArrayQueryActionTrait;
 use Civi\Api4\Query\SqlField;
 use Civi\Api4\SearchDisplay;
 use Civi\Api4\Utils\CoreUtil;
+use Civi\Api4\Utils\FormattingUtil;
 
 /**
  * Base class for running a search.
@@ -25,7 +25,8 @@ use Civi\Api4\Utils\CoreUtil;
  */
 abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
 
-  use SavedSearchInspectorTrait;
+  use \Civi\Api4\Generic\Traits\SavedSearchInspectorTrait;
+  use \Civi\Api4\Generic\Traits\ArrayQueryActionTrait;
 
   /**
    * Either the name of the display or an array containing the display definition (for preview mode)
@@ -86,11 +87,14 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
   /**
    * @param \Civi\Api4\Generic\Result $result
    * @throws UnauthorizedException
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   public function _run(\Civi\Api4\Generic\Result $result) {
-    // Only administrators can use this in unsecured "preview mode"
-    if ((is_array($this->savedSearch) || is_array($this->display)) && $this->checkPermissions && !\CRM_Core_Permission::check('administer CiviCRM data')) {
+    // Only SearchKit admins can use this in unsecured "preview mode"
+    if (
+      (is_array($this->savedSearch) || is_array($this->display)) && $this->checkPermissions &&
+      !\CRM_Core_Permission::check([['administer CiviCRM data', 'administer search_kit']])
+    ) {
       throw new UnauthorizedException('Access denied');
     }
     $this->loadSavedSearch();
@@ -161,7 +165,7 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
       default:
         if (!empty($data[$key])) {
           $item = $this->getSelectExpression($key);
-          if ($item['expr'] instanceof SqlField && $item['fields'][0]['fk_entity'] === 'File') {
+          if ($item['expr'] instanceof SqlField && $item['fields'][$key]['fk_entity'] === 'File') {
             return $this->generateFileUrl($data[$key]);
           }
         }
@@ -201,6 +205,7 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
     $out = [];
     switch ($column['type']) {
       case 'field':
+      case 'html':
         $rawValue = $data[$column['key']] ?? NULL;
         if (!$this->hasValue($rawValue) && isset($column['empty_value'])) {
           $out['val'] = $this->replaceTokens($column['empty_value'], $data, 'view');
@@ -209,7 +214,7 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
           $out['val'] = $this->rewrite($column, $data);
         }
         else {
-          $out['val'] = $this->formatViewValue($column['key'], $rawValue);
+          $out['val'] = $this->formatViewValue($column['key'], $rawValue, $data);
         }
         if ($this->hasValue($column['label']) && (!empty($column['forceLabel']) || $this->hasValue($out['val']))) {
           $out['label'] = $this->replaceTokens($column['label'], $data, 'view');
@@ -225,6 +230,12 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
           if ($edit) {
             $out['edit'] = $edit;
           }
+        }
+        if ($column['type'] === 'html') {
+          if (is_array($out['val'])) {
+            $out['val'] = implode(', ', $out['val']);
+          }
+          $out['val'] = \CRM_Utils_String::purifyHTML($out['val']);
         }
         break;
 
@@ -299,7 +310,7 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
       $cssClass = $clause[0] ?? '';
       if ($cssClass) {
         $condition = $this->getRuleCondition(array_slice($clause, 1));
-        if (is_null($condition[0]) || (ArrayQueryActionTrait::filterCompare($data, $condition))) {
+        if (is_null($condition[0]) || (self::filterCompare($data, $condition))) {
           $classes[] = $cssClass;
         }
       }
@@ -323,7 +334,7 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
       }
       if ($iconClass) {
         $condition = $this->getRuleCondition($icon['if'] ?? []);
-        if (!is_null($condition[0]) && !(ArrayQueryActionTrait::filterCompare($data, $condition))) {
+        if (!is_null($condition[0]) && !(self::filterCompare($data, $condition))) {
           continue;
         }
         $result[] = ['class' => $iconClass, 'side' => $icon['side'] ?? 'left'];
@@ -467,7 +478,7 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
       }
       return TRUE;
     }
-    return ArrayQueryActionTrait::filterCompare($data, $item['condition']);
+    return self::filterCompare($data, $item['condition']);
   }
 
   /**
@@ -498,18 +509,21 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
       if ($prefix) {
         $path = str_replace('[', '[' . $prefix, $path);
       }
-      // Check access for edit/update links
+      // Check access for edit/update/delete links
       // (presumably if a record is shown in SearchKit the user already has view access, and the check is expensive)
       if ($path && isset($data) && !in_array($link['action'], ['view', 'preview'], TRUE)) {
         $id = $data[$prefix . $idKey] ?? NULL;
         $id = is_array($id) ? $id[$index] ?? NULL : $id;
         if ($id) {
+          $values = [$idField => $id];
+          // If not aggregated, add other values to help checkAccess be efficient
+          if (!is_array($data[$prefix . $idKey])) {
+            $values += \CRM_Utils_Array::filterByPrefix($data, $prefix);
+          }
           $access = civicrm_api4($link['entity'], 'checkAccess', [
             // Fudge links with funny action names to check 'update'
             'action' => $link['action'] === 'delete' ? 'delete' : 'update',
-            'values' => [
-              $idField => $id,
-            ],
+            'values' => $values,
           ], 0)['access'];
           if (!$access) {
             return NULL;
@@ -535,8 +549,8 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
   }
 
   /**
-   * @param $column
-   * @param $data
+   * @param array $column
+   * @param array $data
    * @return array{entity: string, action: string, input_type: string, data_type: string, options: bool, serialize: bool, nullable: bool, fk_entity: string, value_key: string, record: array, value: mixed}|null
    */
   private function formatEditableColumn($column, $data) {
@@ -547,9 +561,15 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
       $editable['action'] = 'update';
       $editable['record'][$editable['id_key']] = $data[$editable['id_path']];
       $editable['value'] = $data[$editable['value_path']];
+      // Ensure field is appropriate to this entity sub-type
+      $field = $this->getField($column['key']);
+      $entityValues = FormattingUtil::filterByPath($data, $editable['id_path'], $editable['id_key']);
+      if (!$this->fieldBelongsToEntity($editable['entity'], $field['name'], $entityValues)) {
+        return NULL;
+      }
     }
     // Generate params to create new record, if applicable
-    elseif ($editable['explicit_join']) {
+    elseif ($editable['explicit_join'] && !$this->getJoin($editable['explicit_join'])['bridge']) {
       $editable['action'] = 'create';
       $editable['value'] = NULL;
       $editable['nullable'] = FALSE;
@@ -577,6 +597,21 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
           }
         }
       }
+      // Ensure all required values exist for create action
+      $vals = array_keys(array_filter($editable['record']));
+      $vals[] = $editable['value_key'];
+      $missingRequiredFields = civicrm_api4($editable['entity'], 'getFields', [
+        'action' => 'create',
+        'where' => [
+          ['type', '=', 'Field'],
+          ['required', '=', TRUE],
+          ['default_value', 'IS NULL'],
+          ['name', 'NOT IN', $vals],
+        ],
+      ]);
+      if ($missingRequiredFields->count() || count($vals) === 1) {
+        return NULL;
+      }
     }
     // Ensure current user has access
     if ($editable['record']) {
@@ -585,7 +620,8 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
         'values' => $editable['record'],
       ], 0)['access'];
       if ($access) {
-        \CRM_Utils_Array::remove($editable, 'id_key', 'id_path', 'value_path', 'explicit_join');
+        // Remove info that's for internal use only
+        \CRM_Utils_Array::remove($editable, 'id_key', 'id_path', 'value_path', 'explicit_join', 'grouping_fields');
         return $editable;
       }
     }
@@ -593,10 +629,36 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
   }
 
   /**
+   * Check if a field is appropriate for this entity type or sub-type.
+   *
+   * For example, the 'first_name' field does not belong to Contacts of type Organization.
+   * And custom data is sometimes limited to specific contact types, event types, case types, etc.
+   *
+   * @param string $entityName
+   * @param string $fieldName
+   * @param array $entityValues
+   * @param bool $checkPermissions
+   * @return bool
+   */
+  private function fieldBelongsToEntity($entityName, $fieldName, $entityValues, $checkPermissions = TRUE) {
+    try {
+      return (bool) civicrm_api4($entityName, 'getFields', [
+        'checkPermissions' => $checkPermissions,
+        'where' => [['name', '=', $fieldName]],
+        'values' => $entityValues,
+      ])->count();
+    }
+    catch (\CRM_Core_Exception $e) {
+      return FALSE;
+    }
+  }
+
+  /**
    * @param $key
-   * @return array{entity: string, input_type: string, data_type: string, options: bool, serialize: bool, nullable: bool, fk_entity: string, value_key: string, value_path: string, id_key: string, id_path: string, explicit_join: string}|null
+   * @return array{entity: string, input_type: string, data_type: string, options: bool, serialize: bool, nullable: bool, fk_entity: string, value_key: string, value_path: string, id_key: string, id_path: string, explicit_join: string, grouping_fields: array}|null
    */
   private function getEditableInfo($key) {
+    $result = NULL;
     // Strip pseudoconstant suffix
     [$key] = explode(':', $key);
     $field = $this->getField($key);
@@ -606,13 +668,14 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
     }
     if ($field) {
       $idKey = CoreUtil::getIdFieldName($field['entity']);
-      $idPath = ($field['explicit_join'] ? $field['explicit_join'] . '.' : '') . $idKey;
+      $path = ($field['explicit_join'] ? $field['explicit_join'] . '.' : '');
+      $idPath = $path . $idKey;
       // Hack to support editing relationships
       if ($field['entity'] === 'RelationshipCache') {
         $field['entity'] = 'Relationship';
-        $idPath = ($field['explicit_join'] ? $field['explicit_join'] . '.' : '') . 'relationship_id';
+        $idPath = $path . 'relationship_id';
       }
-      return [
+      $result = [
         'entity' => $field['entity'],
         'input_type' => $field['input_type'],
         'data_type' => $field['data_type'],
@@ -625,9 +688,18 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
         'id_key' => $idKey,
         'id_path' => $idPath,
         'explicit_join' => $field['explicit_join'],
+        'grouping_fields' => [],
       ];
+      // Grouping fields get added to the query so that contact sub-type and entity type (for custom fields)
+      // are available to filter fields specific to an entity sub-type. See self::fieldBelongsToEntity()
+      if ($field['type'] === 'Custom' || $field['entity'] === 'Contact') {
+        $customInfo = \Civi\Api4\Utils\CoreUtil::getCustomGroupExtends($field['entity']);
+        foreach ((array) ($customInfo['grouping'] ?? []) as $grouping) {
+          $result['grouping_fields'][] = $path . $grouping;
+        }
+      }
     }
-    return NULL;
+    return $result;
   }
 
   /**
@@ -658,19 +730,24 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
    * @param int $index
    * @return string
    */
-  private function replaceTokens($tokenExpr, $data, $format, $index = 0) {
-    if (strpos($tokenExpr, '[') !== FALSE) {
+  private function replaceTokens($tokenExpr, $data, $format, $index = NULL) {
+    if (strpos(($tokenExpr ?? ''), '[') !== FALSE) {
       foreach ($this->getTokens($tokenExpr) as $token) {
         $val = $data[$token] ?? NULL;
         if (isset($val) && $format === 'view') {
-          $val = $this->formatViewValue($token, $val);
+          $val = $this->formatViewValue($token, $val, $data);
         }
-        $replacement = is_array($val) ? $val[$index] ?? '' : $val;
+        if (!(is_null($index))) {
+          $replacement = is_array($val) ? $val[$index] ?? '' : $val;
+        }
+        else {
+          $replacement = implode(', ', (array) $val);
+        }
         // A missing token value in a url invalidates it
         if ($format === 'url' && (!isset($replacement) || $replacement === '')) {
           return NULL;
         }
-        $tokenExpr = str_replace('[' . $token . ']', $replacement, $tokenExpr);
+        $tokenExpr = str_replace('[' . $token . ']', ($replacement ?? ''), ($tokenExpr ?? ''));
       }
     }
     return $tokenExpr;
@@ -680,12 +757,13 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
    * Format raw field value according to data type
    * @param string $key
    * @param mixed $rawValue
+   * @param array $data
    * @return array|string
    */
-  protected function formatViewValue($key, $rawValue) {
+  protected function formatViewValue($key, $rawValue, $data) {
     if (is_array($rawValue)) {
-      return array_map(function($val) use ($key) {
-        return $this->formatViewValue($key, $val);
+      return array_map(function($val) use ($key, $data) {
+        return $this->formatViewValue($key, $val, $data);
       }, $rawValue);
     }
 
@@ -701,7 +779,9 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
         break;
 
       case 'Money':
-        $formatted = \CRM_Utils_Money::format($rawValue);
+        $currencyField = $this->getCurrencyField($key);
+        $currency = is_string($data[$currencyField] ?? NULL) ? $data[$currencyField] : NULL;
+        $formatted = \Civi::format()->money($rawValue, $currency);
         break;
 
       case 'Date':
@@ -717,8 +797,9 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
    */
   protected function applyFilters() {
     // Allow all filters that are included in SELECT clause or are fields on the Afform.
-    $afformFilters = $this->getAfformFilters();
-    $allowedFilters = array_merge($this->getSelectAliases(), $afformFilters);
+    $fieldFilters = $this->getAfformFilterFields();
+    $directiveFilters = $this->getAfformDirectiveFilters();
+    $allowedFilters = array_merge($this->getSelectAliases(), $fieldFilters, $directiveFilters);
 
     // Ignore empty strings
     $filters = array_filter($this->filters, [$this, 'hasValue']);
@@ -731,7 +812,8 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
       if (in_array($key, $allowedFilters, TRUE) || !array_diff($fieldNames, $allowedFilters)) {
         $this->applyFilter($fieldNames, $value);
       }
-      if (in_array($key, $afformFilters, TRUE)) {
+      // Filter labels are used to set the page title for drilldown forms
+      if (in_array($key, $directiveFilters, TRUE)) {
         $this->addFilterLabel($key, $value);
       }
     }
@@ -754,91 +836,6 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
       }
     }
     return $result;
-  }
-
-  /**
-   * @param array $fieldNames
-   *   If multiple field names are given they will be combined in an OR clause
-   * @param mixed $value
-   */
-  private function applyFilter(array $fieldNames, $value) {
-    // Global setting determines if % wildcard should be added to both sides (default) or only the end of a search string
-    $prefixWithWildcard = \Civi::settings()->get('includeWildCardInName');
-
-    // Based on the first field, decide which clause to add this condition to
-    $fieldName = $fieldNames[0];
-    $field = $this->getField($fieldName);
-    // If field is not found it must be an aggregated column & belongs in the HAVING clause.
-    if (!$field) {
-      $this->_apiParams += ['having' => []];
-      $clause =& $this->_apiParams['having'];
-    }
-    // If field belongs to an EXCLUDE join, it should be added as a join condition
-    else {
-      $prefix = strpos($fieldName, '.') ? explode('.', $fieldName)[0] : NULL;
-      foreach ($this->_apiParams['join'] ?? [] as $idx => $join) {
-        if (($join[1] ?? 'LEFT') === 'EXCLUDE' && (explode(' AS ', $join[0])[1] ?? '') === $prefix) {
-          $clause =& $this->_apiParams['join'][$idx];
-        }
-      }
-    }
-    // Default: add filter to WHERE clause
-    if (!isset($clause)) {
-      $clause =& $this->_apiParams['where'];
-    }
-
-    $filterClauses = [];
-
-    foreach ($fieldNames as $fieldName) {
-      $field = $this->getField($fieldName);
-      $dataType = $field['data_type'] ?? NULL;
-      // Array is either associative `OP => VAL` or sequential `IN (...)`
-      if (is_array($value)) {
-        $value = array_filter($value, [$this, 'hasValue']);
-        // If array does not contain operators as keys, assume array of values
-        if (array_diff_key($value, array_flip(CoreUtil::getOperators()))) {
-          // Use IN for regular fields
-          if (empty($field['serialize'])) {
-            $filterClauses[] = [$fieldName, 'IN', $value];
-          }
-          // Use an OR group of CONTAINS for array fields
-          else {
-            $orGroup = [];
-            foreach ($value as $val) {
-              $orGroup[] = [$fieldName, 'CONTAINS', $val];
-            }
-            $filterClauses[] = ['OR', $orGroup];
-          }
-        }
-        // Operator => Value array
-        else {
-          $andGroup = [];
-          foreach ($value as $operator => $val) {
-            $andGroup[] = [$fieldName, $operator, $val];
-          }
-          $filterClauses[] = ['AND', $andGroup];
-        }
-      }
-      elseif (!empty($field['serialize'])) {
-        $filterClauses[] = [$fieldName, 'CONTAINS', $value];
-      }
-      elseif (!empty($field['options']) || in_array($dataType, ['Integer', 'Boolean', 'Date', 'Timestamp'])) {
-        $filterClauses[] = [$fieldName, '=', $value];
-      }
-      elseif ($prefixWithWildcard) {
-        $filterClauses[] = [$fieldName, 'CONTAINS', $value];
-      }
-      else {
-        $filterClauses[] = [$fieldName, 'LIKE', $value . '%'];
-      }
-    }
-    // Single field
-    if (count($filterClauses) === 1) {
-      $clause[] = $filterClauses[0];
-    }
-    else {
-      $clause[] = ['OR', $filterClauses];
-    }
   }
 
   /**
@@ -888,21 +885,20 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
     $existing = array_map(function($item) {
       return explode(' AS ', $item)[1] ?? $item;
     }, $apiParams['select']);
-    $additions = [];
     // Add primary key field if actions are enabled
     // (only needed for non-dao entities, as Api4SelectQuery will auto-add the id)
     if (!in_array('DAOEntity', CoreUtil::getInfoItem($this->savedSearch['api_entity'], 'type')) &&
       (!empty($this->display['settings']['actions']) || !empty($this->display['settings']['draggable']))
     ) {
-      $additions = CoreUtil::getInfoItem($this->savedSearch['api_entity'], 'primary_key');
+      $this->addSelectExpression(CoreUtil::getIdFieldName($this->savedSearch['api_entity']));
     }
     // Add draggable column (typically "weight")
     if (!empty($this->display['settings']['draggable'])) {
-      $additions[] = $this->display['settings']['draggable'];
+      $this->addSelectExpression($this->display['settings']['draggable']);
     }
     // Add style conditions for the display
     foreach ($this->getCssRulesSelect($this->display['settings']['cssRules'] ?? []) as $addition) {
-      $additions[] = $addition;
+      $this->addSelectExpression($addition);
     }
     $possibleTokens = '';
     foreach ($this->display['settings']['columns'] as $column) {
@@ -918,32 +914,99 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
         $possibleTokens .= $this->getLinkPath($link) ?? '';
       }
 
-      // Select id & value for in-place editing
+      // Select id, value & grouping for in-place editing
       if (!empty($column['editable'])) {
         $editable = $this->getEditableInfo($column['key']);
         if ($editable) {
-          $additions[] = $editable['value_path'];
-          $additions[] = $editable['id_path'];
+          foreach (array_merge($editable['grouping_fields'], [$editable['value_path'], $editable['id_path']]) as $addition) {
+            $this->addSelectExpression($addition);
+          }
         }
       }
       // Add style & icon conditions for the column
-      $additions = array_merge($additions,
-        $this->getCssRulesSelect($column['cssRules'] ?? []),
-        $this->getIconsSelect($column['icons'] ?? [])
-      );
-    }
-    // Add fields referenced via token
-    $tokens = $this->getTokens($possibleTokens);
-    // Only add fields not already in SELECT clause
-    $additions = array_diff(array_merge($additions, $tokens), $existing);
-    // Tokens for aggregated columns start with 'GROUP_CONCAT_'
-    foreach ($additions as $index => $alias) {
-      if (strpos($alias, 'GROUP_CONCAT_') === 0) {
-        $additions[$index] = 'GROUP_CONCAT(' . $this->getJoinFromAlias(explode('_', $alias, 3)[2]) . ') AS ' . $alias;
+      foreach ($this->getCssRulesSelect($column['cssRules'] ?? []) as $addition) {
+        $this->addSelectExpression($addition);
+      }
+      foreach ($this->getIconsSelect($column['icons'] ?? []) as $addition) {
+        $this->addSelectExpression($addition);
       }
     }
-    $this->_selectClause = NULL;
-    $apiParams['select'] = array_unique(array_merge($apiParams['select'], $additions));
+    // Add fields referenced via token
+    foreach ($this->getTokens($possibleTokens) as $addition) {
+      $this->addSelectExpression($addition);
+    }
+
+    // When selecting monetary fields, also select currency
+    foreach ($apiParams['select'] as $select) {
+      $currencyFieldName = $this->getCurrencyField($select);
+      if ($currencyFieldName) {
+        $this->addSelectExpression($currencyFieldName);
+      }
+    }
+  }
+
+  /**
+   * Given a field that contains money, find the corresponding currency field
+   *
+   * @param string $select
+   * @return string|null
+   */
+  private function getCurrencyField(string $select):?string {
+    $clause = $this->getSelectExpression($select);
+    // Only deal with fields of type money.
+    // TODO: In theory it might be possible to support aggregated columns but be careful about FULL_GROUP_BY errors
+    if (!($clause && $clause['expr']->isType('SqlField') && $clause['dataType'] === 'Money' && $clause['fields'])) {
+      return NULL;
+    }
+    $moneyFieldAlias = array_keys($clause['fields'])[0];
+    $moneyField = $clause['fields'][$moneyFieldAlias];
+    // Custom fields do their own thing wrt currency
+    if ($moneyField['type'] === 'Custom') {
+      return NULL;
+    }
+    $prefix = substr($moneyFieldAlias, 0, strrpos($moneyFieldAlias, $moneyField['name']));
+    // If the entity has a field named 'currency', just assume that's it.
+    if ($this->getField($prefix . 'currency')) {
+      return $prefix . 'currency';
+    }
+    // Some currency fields go by other names like `fee_currency`. We find them by checking the pseudoconstant.
+    $entityDao = CoreUtil::getInfoItem($moneyField['entity'], 'dao');
+    if ($entityDao) {
+      foreach ($entityDao::getSupportedFields() as $fieldName => $field) {
+        if (($field['pseudoconstant']['table'] ?? NULL) === 'civicrm_currency') {
+          return $prefix . $fieldName;
+        }
+      }
+    }
+    // If the base entity has a field named 'currency', fall back on that.
+    if ($this->getField('currency')) {
+      return 'currency';
+    }
+    // Finally, if there's a FK field to civicrm_contribution, we can use an implicit join
+    // E.G. the LineItem entity has no `currency` field of its own & uses that of the contribution record
+    if ($entityDao) {
+      foreach ($entityDao::getSupportedFields() as $fieldName => $field) {
+        if (($field['FKClassName'] ?? NULL) === 'CRM_Contribute_DAO_Contribution') {
+          return $prefix . $fieldName . '.currency';
+        }
+      }
+    }
+    return NULL;
+  }
+
+  /**
+   * @param string $expr
+   */
+  protected function addSelectExpression(string $expr):void {
+    if (!$this->getSelectExpression($expr)) {
+      // Tokens for aggregated columns start with 'GROUP_CONCAT_'
+      if (strpos($expr, 'GROUP_CONCAT_') === 0) {
+        $expr = 'GROUP_CONCAT(' . $this->getJoinFromAlias(explode('_', $expr, 3)[2]) . ') AS ' . $expr;
+      }
+      $this->_apiParams['select'][] = $expr;
+      // Force-reset cache so it gets rebuilt with the new select param
+      $this->_selectClause = NULL;
+    }
   }
 
   /**
@@ -977,35 +1040,36 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
   }
 
   /**
-   * Checks if a filter contains a non-empty value
+   * Returns a list of afform fields used as search filters
    *
-   * "Empty" search values are [], '', and NULL.
-   * Also recursively checks arrays to ensure they contain at least one non-empty value.
+   * Limited to the current display
    *
-   * @param $value
-   * @return bool
+   * @return string[]
    */
-  private function hasValue($value) {
-    return $value !== '' && $value !== NULL && (!is_array($value) || array_filter($value, [$this, 'hasValue']));
+  private function getAfformFilterFields() {
+    $afform = $this->loadAfform();
+    if ($afform) {
+      return array_column(\CRM_Utils_Array::findAll(
+        $afform['searchDisplay']['fieldset'],
+        ['#tag' => 'af-field']
+      ), 'name');
+    }
+    return [];
   }
 
   /**
-   * Returns a list of filter fields and directive filters
+   * Finds all directive filters and applies the ones with a literal value
    *
-   * Automatically applies directive filters
+   * Returns the list of filters that did not get auto-applied (value was passed via js)
    *
-   * @return array
+   * @return string[]
    */
-  private function getAfformFilters() {
+  private function getAfformDirectiveFilters() {
     $afform = $this->loadAfform();
     if (!$afform) {
       return [];
     }
-    // Get afform field filters
-    $filterKeys = array_column(\CRM_Utils_Array::findAll(
-      $afform['searchDisplay']['fieldset'],
-      ['#tag' => 'af-field']
-    ), 'name');
+    $filterKeys = [];
     // Get filters passed into search display directive from Afform markup
     $filterAttr = $afform['searchDisplay']['filters'] ?? NULL;
     if ($filterAttr && is_string($filterAttr) && $filterAttr[0] === '{') {
@@ -1084,12 +1148,32 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
       ],
       [
         'name' => 'user_contact_id',
-        'fieldName' => 'result_row_num',
+        'fieldName' => 'user_contact_id',
         'title' => ts('Current User ID'),
         'label' => ts('Current User ID'),
         'description' => ts('Contact ID of the current user if logged in'),
         'type' => 'Pseudo',
         'data_type' => 'Integer',
+        'readonly' => TRUE,
+      ],
+      [
+        'name' => 'CURDATE()',
+        'fieldName' => 'CURDATE()',
+        'title' => ts('Current Date'),
+        'label' => ts('Current Date'),
+        'description' => ts('System date at the moment the search is run'),
+        'type' => 'Pseudo',
+        'data_type' => 'Date',
+        'readonly' => TRUE,
+      ],
+      [
+        'name' => 'NOW()',
+        'fieldName' => 'NOW()',
+        'title' => ts('Current Date + Time'),
+        'label' => ts('Current Date + Time'),
+        'description' => ts('System date and time at the moment the search is run'),
+        'type' => 'Pseudo',
+        'data_type' => 'Timestamp',
         'readonly' => TRUE,
       ],
     ];
@@ -1100,7 +1184,7 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
    *
    * @param $fieldName
    * @param $value
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    * @throws \Civi\API\Exception\NotImplementedException
    */
   private function addFilterLabel($fieldName, $value) {

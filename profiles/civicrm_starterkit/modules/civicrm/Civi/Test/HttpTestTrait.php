@@ -139,9 +139,25 @@ trait HttpTestTrait {
    */
   protected function assertContentType($expectType, $response = NULL) {
     $response = $this->resolveResponse($response);
-    list($actualType) = explode(';', $response->getHeader('Content-Type')[0]);
+    [$actualType] = explode(';', $response->getHeader('Content-Type')[0]);
     $fmt = $actualType === $expectType ? '' : $this->formatFailure($response);
     $this->assertEquals($expectType, $actualType, "Expected content-type $expectType. Received content-type $actualType.\n$fmt");
+    return $this;
+  }
+
+  /**
+   * @param string $regexp
+   * @param \Psr\Http\Message\ResponseInterface $response
+   * @param string $message
+   */
+  protected function assertBodyRegexp($regexp, $response = NULL, $message = NULL) {
+    if ($message) {
+      $message .= "\n";
+    }
+
+    $response = $this->resolveResponse($response);
+    $this->assertRegexp($regexp, (string) $response->getBody(),
+      $message . 'Response body does not match pattern' . $this->formatFailure($response));
     return $this;
   }
 

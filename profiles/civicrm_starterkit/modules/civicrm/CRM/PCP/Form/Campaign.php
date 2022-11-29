@@ -262,7 +262,7 @@ class CRM_PCP_Form_Campaign extends CRM_Core_Form {
       $supporterUrl = CRM_Utils_System::url('civicrm/contact/view',
         "reset=1&cid={$pcp->contact_id}",
         TRUE, NULL, FALSE,
-        FALSE
+        FALSE, TRUE
       );
       $this->assign('supporterUrl', $supporterUrl);
       $supporterName = CRM_Core_DAO::getFieldValue('CRM_Contact_DAO_Contact', $pcp->contact_id, 'display_name');
@@ -315,7 +315,7 @@ class CRM_PCP_Form_Campaign extends CRM_Core_Form {
       list($sent, $subject, $message, $html) = CRM_Core_BAO_MessageTemplate::sendTemplate(
         [
           'groupName' => 'msg_tpl_workflow_contribution',
-          'valueName' => 'pcp_notify',
+          'workflow' => 'pcp_notify',
           'contactId' => $contactID,
           'from' => "$domainEmailName <$domainEmailAddress>",
           'toEmail' => $to,

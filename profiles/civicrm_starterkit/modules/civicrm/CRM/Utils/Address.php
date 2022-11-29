@@ -183,7 +183,7 @@ class CRM_Utils_Address {
     }
 
     // replacements in case of Custom Token
-    if (stristr($formatted, 'custom_')) {
+    if (stristr(($formatted ?? ''), 'custom_')) {
       $customToken = array_keys($fields);
       foreach ($customToken as $value) {
         if (substr($value, 0, 7) == 'custom_') {
@@ -203,10 +203,10 @@ class CRM_Utils_Address {
     // the value is not empty, otherwise drop the whole {fooTOKENbar}
     foreach ($replacements as $token => $value) {
       if ($value && is_string($value) || is_numeric($value)) {
-        $formatted = preg_replace("/{([^{}]*)\b{$token}\b([^{}]*)}/u", "\${1}{$value}\${2}", $formatted);
+        $formatted = preg_replace("/{([^{}]*)\b{$token}\b([^{}]*)}/u", "\${1}{$value}\${2}", ($formatted ?? ''));
       }
       else {
-        $formatted = preg_replace("/{[^{}]*\b{$token}\b[^{}]*}/u", '', $formatted);
+        $formatted = preg_replace("/{[^{}]*\b{$token}\b[^{}]*}/u", '', ($formatted ?? ''));
       }
     }
 
@@ -596,6 +596,15 @@ class CRM_Utils_Address {
       }
     }
     return CRM_Utils_Address::format($addressFields);
+  }
+
+  /**
+   * @return string
+   */
+  public static function getDefaultDistanceUnit() {
+    $countryDefault = Civi::settings()->get('defaultContactCountry');
+    // US, UK use miles. Everything else is Km
+    return ($countryDefault == '1228' || $countryDefault == '1226') ? 'miles' : 'km';
   }
 
 }

@@ -2,6 +2,7 @@
 
 namespace Civi\Api4\Action\SearchDisplay;
 
+use Civi\Api4\Generic\Traits\SavedSearchInspectorTrait;
 use Civi\Api4\SavedSearch;
 use Civi\Api4\Utils\FormattingUtil;
 use Civi\Search\Display;
@@ -39,11 +40,14 @@ class GetDefault extends \Civi\Api4\Generic\AbstractAction {
   /**
    * @param \Civi\Api4\Generic\Result $result
    * @throws UnauthorizedException
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   public function _run(\Civi\Api4\Generic\Result $result) {
-    // Only administrators can use this in unsecured "preview mode"
-    if (is_array($this->savedSearch) && $this->checkPermissions && !\CRM_Core_Permission::check('administer CiviCRM data')) {
+    // Only SearchKit admins can use this in unsecured "preview mode"
+    if (
+      is_array($this->savedSearch) && $this->checkPermissions &&
+      !\CRM_Core_Permission::check([['administer CiviCRM data', 'administer search_kit']])
+    ) {
       throw new UnauthorizedException('Access denied');
     }
     $this->loadSavedSearch();
@@ -69,6 +73,7 @@ class GetDefault extends \Civi\Api4\Generic\AbstractAction {
           'show_count' => TRUE,
           'expose_limit' => TRUE,
         ],
+        'placeholder' => 5,
         'sort' => [],
         'columns' => [],
       ],
@@ -194,7 +199,7 @@ class GetDefault extends \Civi\Api4\Generic\AbstractAction {
    */
   private function getColumnLink(&$col, $clause) {
     if ($clause['expr'] instanceof SqlField || $clause['expr'] instanceof SqlFunctionGROUP_CONCAT) {
-      $field = $clause['fields'][0] ?? NULL;
+      $field = \CRM_Utils_Array::first($clause['fields'] ?? []);
       if ($field &&
         CoreUtil::getInfoItem($field['entity'], 'label_field') === $field['name'] &&
         !empty(CoreUtil::getInfoItem($field['entity'], 'paths')['view'])

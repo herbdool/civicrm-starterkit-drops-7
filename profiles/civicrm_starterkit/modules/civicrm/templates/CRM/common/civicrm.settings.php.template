@@ -41,9 +41,6 @@ global $civicrm_root, $civicrm_setting, $civicrm_paths;
  * Settings for Drupal 7.x:
  *      define( 'CIVICRM_UF'        , 'Drupal');
  *
- * Settings for Drupal 6.x:
- *      define( 'CIVICRM_UF'        , 'Drupal6');
- *
  * Settings for Joomla 1.7.x - 2.5.x:
  *      define( 'CIVICRM_UF'        , 'Joomla');
  *
@@ -746,7 +743,9 @@ if (!defined('CIVICRM_CLEANURL')) {
 }
 
 // force PHP to auto-detect Mac line endings
-ini_set('auto_detect_line_endings', '1');
+if (version_compare(PHP_VERSION, '8.1') < 0) {
+  ini_set('auto_detect_line_endings', '1');
+}
 
 // make sure the memory_limit is at least 64 MB
 $memLimitString = trim(ini_get('memory_limit'));

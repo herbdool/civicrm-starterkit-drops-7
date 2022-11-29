@@ -8,16 +8,16 @@
 ; upgrade extensions (sometimes core extensions are also included):
 ; terminus drush site:env cvapi Extension.upgrade
 
-core = 7.89
+core = 7.92
 api = 2
 
 ; Drupal Core
-projects[drupal][version] = "7.89"
+projects[drupal][version] = "7.92"
 
 ; ====== CIVICRM RELATED =========
 
 libraries[civicrm][download][type] = get
-libraries[civicrm][download][url] = "https://download.civicrm.org/civicrm-5.49.4-drupal.tar.gz"
+libraries[civicrm][download][url] = "https://download.civicrm.org/civicrm-5.55.2-drupal.tar.gz"
 libraries[civicrm][destination] = modules
 libraries[civicrm][directory_name] = civicrm
 

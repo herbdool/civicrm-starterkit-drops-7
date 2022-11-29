@@ -1,21 +1,25 @@
 <?php
 namespace api\v4\SearchDisplay;
 
+// Not sure why this is needed but without it Jenkins crashed
+require_once __DIR__ . '/../../../../../../../tests/phpunit/api/v4/Api4TestBase.php';
+
+use api\v4\Api4TestBase;
 use Civi\API\Exception\UnauthorizedException;
 use Civi\Api4\Activity;
 use Civi\Api4\Contact;
 use Civi\Api4\ContactType;
 use Civi\Api4\Email;
+use Civi\Api4\Phone;
 use Civi\Api4\SavedSearch;
 use Civi\Api4\SearchDisplay;
 use Civi\Api4\UFMatch;
-use Civi\Test\HeadlessInterface;
 use Civi\Test\TransactionalInterface;
 
 /**
  * @group headless
  */
-class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInterface, TransactionalInterface {
+class SearchRunTest extends Api4TestBase implements TransactionalInterface {
   use \Civi\Test\ACLPermissionTrait;
 
   public function setUpHeadless() {
@@ -310,6 +314,145 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
   }
 
   /**
+   * Test in-place editable for update and create.
+   */
+  public function testInPlaceEditAndCreate() {
+    $lastName = uniqid(__FUNCTION__);
+    $sampleData = [
+      ['first_name' => 'One', 'last_name' => $lastName],
+      ['last_name' => $lastName],
+    ];
+    $contacts = Contact::save(FALSE)->setRecords($sampleData)->execute()->column('id');
+    $email = Email::create(FALSE)
+      ->addValue('contact_id', $contacts[0])
+      ->addValue('email', 'testmail@unit.test')
+      ->execute()->single()['id'];
+    $phone = Phone::create(FALSE)
+      ->addValue('contact_id', $contacts[1])
+      ->addValue('phone', '123456')
+      ->execute()->single()['id'];
+
+    $params = [
+      'checkPermissions' => FALSE,
+      'return' => 'page:1',
+      'savedSearch' => [
+        'api_entity' => 'Contact',
+        'api_params' => [
+          'version' => 4,
+          'select' => ['first_name', 'Contact_Email_contact_id_01.email', 'Contact_Phone_contact_id_01.phone'],
+          'where' => [['last_name', '=', $lastName]],
+          'join' => [
+            [
+              "Email AS Contact_Email_contact_id_01",
+              "LEFT",
+              ["id", "=", "Contact_Email_contact_id_01.contact_id"],
+              ["Contact_Email_contact_id_01.is_primary", "=", TRUE],
+            ],
+            [
+              "Phone AS Contact_Phone_contact_id_01",
+              "LEFT",
+              ["id", "=", "Contact_Phone_contact_id_01.contact_id"],
+            ],
+          ],
+        ],
+      ],
+      'display' => [
+        'type' => 'table',
+        'label' => '',
+        'settings' => [
+          'limit' => 20,
+          'pager' => FALSE,
+          'columns' => [
+            [
+              'key' => 'first_name',
+              'label' => 'Name',
+              'type' => 'field',
+              'editable' => TRUE,
+              'icons' => [['field' => 'activity_type_id:icon', 'side' => 'left']],
+            ],
+            [
+              'key' => 'Contact_Email_contact_id_01.email',
+              'label' => 'Email',
+              'type' => 'field',
+              'editable' => TRUE,
+            ],
+            [
+              'key' => 'Contact_Phone_contact_id_01.phone',
+              'label' => 'Phone',
+              'type' => 'field',
+              'editable' => TRUE,
+            ],
+          ],
+          'sort' => [
+            ['id', 'ASC'],
+          ],
+        ],
+      ],
+    ];
+    $result = civicrm_api4('SearchDisplay', 'run', $params);
+
+    // Contact 1 first name can be updated
+    $this->assertEquals('One', $result[0]['columns'][0]['val']);
+    $this->assertEquals($contacts[0], $result[0]['columns'][0]['edit']['record']['id']);
+    $this->assertEquals('Contact', $result[0]['columns'][0]['edit']['entity']);
+    $this->assertEquals('Text', $result[0]['columns'][0]['edit']['input_type']);
+    $this->assertEquals('String', $result[0]['columns'][0]['edit']['data_type']);
+    $this->assertEquals('first_name', $result[0]['columns'][0]['edit']['value_key']);
+    $this->assertEquals('update', $result[0]['columns'][0]['edit']['action']);
+    $this->assertEquals('One', $result[0]['columns'][0]['edit']['value']);
+
+    // Contact 1 email can be updated
+    $this->assertEquals('testmail@unit.test', $result[0]['columns'][1]['val']);
+    $this->assertEquals($email, $result[0]['columns'][1]['edit']['record']['id']);
+    $this->assertEquals('Email', $result[0]['columns'][1]['edit']['entity']);
+    $this->assertEquals('Text', $result[0]['columns'][1]['edit']['input_type']);
+    $this->assertEquals('String', $result[0]['columns'][1]['edit']['data_type']);
+    $this->assertEquals('email', $result[0]['columns'][1]['edit']['value_key']);
+    $this->assertEquals('update', $result[0]['columns'][1]['edit']['action']);
+    $this->assertEquals('testmail@unit.test', $result[0]['columns'][1]['edit']['value']);
+
+    // Contact 1 - new phone can be created
+    $this->assertNull($result[0]['columns'][2]['val']);
+    $this->assertEquals(['contact_id' => $contacts[0]], $result[0]['columns'][2]['edit']['record']);
+    $this->assertEquals('Phone', $result[0]['columns'][2]['edit']['entity']);
+    $this->assertEquals('Text', $result[0]['columns'][2]['edit']['input_type']);
+    $this->assertEquals('String', $result[0]['columns'][2]['edit']['data_type']);
+    $this->assertEquals('phone', $result[0]['columns'][2]['edit']['value_key']);
+    $this->assertEquals('create', $result[0]['columns'][2]['edit']['action']);
+    $this->assertNull($result[0]['columns'][2]['edit']['value']);
+
+    // Contact 2 first name can be added
+    $this->assertNull($result[1]['columns'][0]['val']);
+    $this->assertEquals($contacts[1], $result[1]['columns'][0]['edit']['record']['id']);
+    $this->assertEquals('Contact', $result[1]['columns'][0]['edit']['entity']);
+    $this->assertEquals('Text', $result[1]['columns'][0]['edit']['input_type']);
+    $this->assertEquals('String', $result[1]['columns'][0]['edit']['data_type']);
+    $this->assertEquals('first_name', $result[1]['columns'][0]['edit']['value_key']);
+    $this->assertEquals('update', $result[1]['columns'][0]['edit']['action']);
+    $this->assertNull($result[1]['columns'][0]['edit']['value']);
+
+    // Contact 2 - new email can be created
+    $this->assertNull($result[1]['columns'][1]['val']);
+    $this->assertEquals(['contact_id' => $contacts[1], 'is_primary' => TRUE], $result[1]['columns'][1]['edit']['record']);
+    $this->assertEquals('Email', $result[1]['columns'][1]['edit']['entity']);
+    $this->assertEquals('Text', $result[1]['columns'][1]['edit']['input_type']);
+    $this->assertEquals('String', $result[1]['columns'][1]['edit']['data_type']);
+    $this->assertEquals('email', $result[1]['columns'][1]['edit']['value_key']);
+    $this->assertEquals('create', $result[1]['columns'][1]['edit']['action']);
+    $this->assertNull($result[1]['columns'][1]['edit']['value']);
+
+    // Contact 2 phone can be updated
+    $this->assertEquals('123456', $result[1]['columns'][2]['val']);
+    $this->assertEquals($phone, $result[1]['columns'][2]['edit']['record']['id']);
+    $this->assertEquals('Phone', $result[1]['columns'][2]['edit']['entity']);
+    $this->assertEquals('Text', $result[1]['columns'][2]['edit']['input_type']);
+    $this->assertEquals('String', $result[1]['columns'][2]['edit']['data_type']);
+    $this->assertEquals('phone', $result[1]['columns'][2]['edit']['value_key']);
+    $this->assertEquals('update', $result[1]['columns'][2]['edit']['action']);
+    $this->assertEquals('123456', $result[1]['columns'][2]['edit']['value']);
+  }
+
+  /**
    * Test running a searchDisplay as a restricted user.
    */
   public function testDisplayACLCheck() {
@@ -573,7 +716,7 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
     }
     $this->assertStringContainsString('failed', $error);
 
-    $config->userPermissionClass->permissions = ['access CiviCRM', 'administer CiviCRM data'];
+    $config->userPermissionClass->permissions = ['access CiviCRM', 'administer search_kit'];
 
     // Admins can edit the search and the display
     SavedSearch::update()->addWhere('name', '=', $searchName)
@@ -653,7 +796,7 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
       civicrm_api4('SearchDisplay', 'run', $params);
       $this->fail();
     }
-    catch (\API_Exception $e) {
+    catch (\CRM_Core_Exception $e) {
     }
 
     // With a random seed, results should be shuffled in stable order
@@ -1077,6 +1220,205 @@ class SearchRunTest extends \PHPUnit\Framework\TestCase implements HeadlessInter
     $this->assertEquals(3, $data['Individual']);
     $this->assertEquals(2, $data['Organization']);
     $this->assertEquals(1, $data['Household']);
+  }
+
+  public function testGroupByFunction(): void {
+    $source = uniqid(__FUNCTION__);
+    $sampleData = [
+      ['birth_date' => '2009-02-05'],
+      ['birth_date' => '1999-02-22'],
+      ['birth_date' => '2012-05-06'],
+    ];
+    Contact::save(FALSE)
+      ->addDefault('source', $source)
+      ->setRecords($sampleData)
+      ->execute();
+
+    $params = [
+      'checkPermissions' => FALSE,
+      'return' => 'page:1',
+      'savedSearch' => [
+        'api_entity' => 'Contact',
+        'api_params' => [
+          'version' => 4,
+          'select' => ['COUNT(id) AS COUNT_id'],
+          'where' => [['source', '=', $source]],
+          'groupBy' => ['MONTH(birth_date)'],
+        ],
+      ],
+      'display' => NULL,
+      'afform' => NULL,
+    ];
+
+    $result = civicrm_api4('SearchDisplay', 'run', $params);
+    $this->assertCount(2, $result);
+    $data = array_column(array_column((array) $result, 'data'), 'COUNT_id');
+    sort($data);
+    $this->assertEquals([1, 2], $data);
+  }
+
+  public function testEditableContactFields() {
+    $source = uniqid(__FUNCTION__);
+    $sampleData = [
+      ['contact_type' => 'Individual', 'first_name' => 'One'],
+      ['contact_type' => 'Individual'],
+      ['contact_type' => 'Organization'],
+      ['contact_type' => 'Household'],
+    ];
+    $contact = Contact::save(FALSE)
+      ->addDefault('source', $source)
+      ->setRecords($sampleData)
+      ->execute();
+
+    $params = [
+      'checkPermissions' => FALSE,
+      'return' => 'page:1',
+      'savedSearch' => [
+        'api_entity' => 'Contact',
+        'api_params' => [
+          'version' => 4,
+          'select' => ['first_name', 'organization_name', 'household_name'],
+          'where' => [['source', '=', $source]],
+        ],
+      ],
+      'display' => [
+        'type' => 'table',
+        'label' => '',
+        'settings' => [
+          'actions' => TRUE,
+          'pager' => [],
+          'columns' => [
+            [
+              'key' => 'first_name',
+              'label' => 'First',
+              'dataType' => 'String',
+              'type' => 'field',
+              'editable' => TRUE,
+            ],
+            [
+              'key' => 'organization_name',
+              'label' => 'First',
+              'dataType' => 'String',
+              'type' => 'field',
+              'editable' => TRUE,
+            ],
+            [
+              'key' => 'household_name',
+              'label' => 'First',
+              'dataType' => 'String',
+              'type' => 'field',
+              'editable' => TRUE,
+            ],
+          ],
+          'sort' => [
+            ['id', 'ASC'],
+          ],
+        ],
+      ],
+      'afform' => NULL,
+    ];
+
+    $result = civicrm_api4('SearchDisplay', 'run', $params);
+    // First Individual
+    $expectedFirstNameEdit = [
+      'entity' => 'Contact',
+      'input_type' => 'Text',
+      'data_type' => 'String',
+      'options' => FALSE,
+      'serialize' => FALSE,
+      'nullable' => TRUE,
+      'fk_entity' => NULL,
+      'value_key' => 'first_name',
+      'record' => ['id' => $contact[0]['id']],
+      'action' => 'update',
+      'value' => 'One',
+    ];
+    // Ensure first_name is editable but not organization_name or household_name
+    $this->assertEquals($expectedFirstNameEdit, $result[0]['columns'][0]['edit']);
+    $this->assertTrue(!isset($result[0]['columns'][1]['edit']));
+    $this->assertTrue(!isset($result[0]['columns'][2]['edit']));
+
+    // Second Individual
+    $expectedFirstNameEdit['record']['id'] = $contact[1]['id'];
+    $expectedFirstNameEdit['value'] = NULL;
+    $this->assertEquals($expectedFirstNameEdit, $result[1]['columns'][0]['edit']);
+    $this->assertTrue(!isset($result[1]['columns'][1]['edit']));
+    $this->assertTrue(!isset($result[1]['columns'][2]['edit']));
+
+    // Third contact: Organization
+    $expectedFirstNameEdit['record']['id'] = $contact[2]['id'];
+    $expectedFirstNameEdit['value_key'] = 'organization_name';
+    $this->assertTrue(!isset($result[2]['columns'][0]['edit']));
+    $this->assertEquals($expectedFirstNameEdit, $result[2]['columns'][1]['edit']);
+    $this->assertTrue(!isset($result[2]['columns'][2]['edit']));
+
+    // Third contact: Household
+    $expectedFirstNameEdit['record']['id'] = $contact[3]['id'];
+    $expectedFirstNameEdit['value_key'] = 'household_name';
+    $this->assertTrue(!isset($result[3]['columns'][0]['edit']));
+    $this->assertTrue(!isset($result[3]['columns'][1]['edit']));
+    $this->assertEquals($expectedFirstNameEdit, $result[3]['columns'][2]['edit']);
+  }
+
+  public function testContributionCurrency():void {
+    $contributions = $this->saveTestRecords('Contribution', [
+      'records' => [
+        ['total_amount' => 100, 'currency' => 'GBP'],
+        ['total_amount' => 200, 'currency' => 'USD'],
+        ['total_amount' => 500, 'currency' => 'JPY'],
+      ],
+    ]);
+
+    $params = [
+      'checkPermissions' => FALSE,
+      'return' => 'page:1',
+      'savedSearch' => [
+        'api_entity' => 'Contribution',
+        'api_params' => [
+          'version' => 4,
+          'select' => ['total_amount'],
+          'where' => [['id', 'IN', $contributions->column('id')]],
+        ],
+      ],
+      'display' => NULL,
+      'sort' => [['id', 'ASC']],
+    ];
+
+    $result = civicrm_api4('SearchDisplay', 'run', $params);
+    $this->assertCount(3, $result);
+
+    // Currency should have been fetched automatically and used to format the value
+    $this->assertEquals('GBP', $result[0]['data']['currency']);
+    $this->assertEquals('£100.00', $result[0]['columns'][0]['val']);
+
+    $this->assertEquals('USD', $result[1]['data']['currency']);
+    $this->assertEquals('$200.00', $result[1]['columns'][0]['val']);
+
+    $this->assertEquals('JPY', $result[2]['data']['currency']);
+    $this->assertEquals('¥500', $result[2]['columns'][0]['val']);
+
+    // Now do a search for the contribution line-items
+    $params['savedSearch'] = [
+      'api_entity' => 'LineItem',
+      'api_params' => [
+        'version' => 4,
+        'select' => ['line_total'],
+        'where' => [['contribution_id', 'IN', $contributions->column('id')]],
+      ],
+    ];
+
+    $result = civicrm_api4('SearchDisplay', 'run', $params);
+    $this->assertCount(3, $result);
+
+    // An automatic join should have been added to fetch the contribution currency
+    $this->assertEquals('GBP', $result[0]['data']['contribution_id.currency']);
+    $this->assertEquals('£100.00', $result[0]['columns'][0]['val']);
+
+    $this->assertEquals('USD', $result[1]['data']['contribution_id.currency']);
+    $this->assertEquals('$200.00', $result[1]['columns'][0]['val']);
+
+    $this->assertEquals('JPY', $result[2]['data']['contribution_id.currency']);
+    $this->assertEquals('¥500', $result[2]['columns'][0]['val']);
   }
 
 }

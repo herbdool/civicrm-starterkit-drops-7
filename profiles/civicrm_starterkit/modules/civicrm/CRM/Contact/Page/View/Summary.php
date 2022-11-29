@@ -122,7 +122,6 @@ class CRM_Contact_Page_View_Summary extends CRM_Contact_Page_View {
     $session->pushUserContext($url);
     $this->assignFieldMetadataToTemplate('Contact');
 
-    $params = [];
     $defaults = [
       // Set empty default values for these - they will be overwritten when the contact is
       // loaded in CRM_Contact_BAO_Contact::retrieve if there are real values
@@ -144,19 +143,16 @@ class CRM_Contact_Page_View_Summary extends CRM_Contact_Page_View {
       // for Demographics.tpl
       'age' => ['y' => '', 'm' => ''],
       'birth_date' => '',
-      // for Website.tpl (the others don't seem to enotice for some reason).
-      'website' => [],
     ];
 
-    $params['contact_id'] = $this->_contactId;
-
-    CRM_Contact_BAO_Contact::getValues(array_merge(['id' => $this->_contactId], $params), $defaults);
-    $defaults['im'] = CRM_Core_BAO_IM::getValues(['contact_id' => $params['contact_id']]);
-    $defaults['email'] = CRM_Core_BAO_Email::getValues(['contact_id' => $params['contact_id']]);
-    $defaults['openid'] = CRM_Core_BAO_OpenID::getValues(['contact_id' => $params['contact_id']]);
-    $defaults['phone'] = CRM_Core_BAO_Phone::getValues(['contact_id' => $params['contact_id']]);
-    $defaults['address'] = CRM_Core_BAO_Address::getValues(['contact_id' => $params['contact_id']], TRUE);
-    CRM_Core_BAO_Website::getValues($params, $defaults);
+    CRM_Contact_BAO_Contact::getValues(['id' => $this->_contactId], $defaults);
+    $defaults['im'] = $this->getLocationValues($this->_contactId, 'IM');
+    $defaults['email'] = $this->getLocationValues($this->_contactId, 'Email');
+    $defaults['openid'] = $this->getLocationValues($this->_contactId, 'OpenID');
+    $defaults['phone'] = $this->getLocationValues($this->_contactId, 'Phone');
+    // This microformat magic is still required...
+    $defaults['address'] = CRM_Core_BAO_Address::getValues(['contact_id' => $this->_contactId], TRUE);
+    $defaults['website'] = $this->getLocationValues($this->_contactId, 'Website');
     // Copy employer fields to the current_employer keys.
     if (($defaults['contact_type'] === 'Individual') && !empty($defaults['employer_id']) && !empty($defaults['organization_name'])) {
       $defaults['current_employer'] = $defaults['organization_name'];
@@ -167,57 +163,23 @@ class CRM_Contact_Page_View_Summary extends CRM_Contact_Page_View {
     $mailingBackend = Civi::settings()->get('mailing_backend');
     $this->assign('mailingOutboundOption', $mailingBackend['outBound_option']);
 
-    $communicationType = [
-      'phone' => [
-        'type' => 'phoneType',
-        'id' => 'phone_type',
-        'daoName' => 'CRM_Core_DAO_Phone',
-        'fieldName' => 'phone_type_id',
-      ],
-      'im' => [
-        'type' => 'IMProvider',
-        'id' => 'provider',
-        'daoName' => 'CRM_Core_DAO_IM',
-        'fieldName' => 'provider_id',
-      ],
-      'website' => [
-        'type' => 'websiteType',
-        'id' => 'website_type',
-        'daoName' => 'CRM_Core_DAO_Website',
-        'fieldName' => 'website_type_id',
-      ],
-      'address' => ['skip' => TRUE, 'customData' => 1],
-      'email' => ['skip' => TRUE],
-      'openid' => ['skip' => TRUE],
-    ];
-
-    foreach ($communicationType as $key => $value) {
-      if (!empty($defaults[$key])) {
-        foreach ($defaults[$key] as & $val) {
-          CRM_Utils_Array::lookupValue($val, 'location_type', CRM_Core_PseudoConstant::get('CRM_Core_DAO_Address', 'location_type_id', ['labelColumn' => 'display_name']), FALSE);
-          if (empty($value['skip'])) {
-            $daoName = $value['daoName'];
-            $pseudoConst = $daoName::buildOptions($value['fieldName'], 'get');
-            CRM_Utils_Array::lookupValue($val, $value['id'], $pseudoConst, FALSE);
-          }
-        }
-        if (isset($value['customData'])) {
-          foreach ($defaults[$key] as $blockId => $blockVal) {
-            $idValue = $blockVal['id'];
-            if ($key == 'address') {
-              if (!empty($blockVal['master_id'])) {
-                $idValue = $blockVal['master_id'];
-              }
-            }
-            $groupTree = CRM_Core_BAO_CustomGroup::getTree(ucfirst($key), NULL, $idValue, NULL, [],
-              NULL, TRUE, NULL, FALSE, CRM_Core_Permission::VIEW);
-            // we setting the prefix to dnc_ below so that we don't overwrite smarty's grouptree var.
-            $defaults[$key][$blockId]['custom'] = CRM_Core_BAO_CustomGroup::buildCustomDataView($this, $groupTree, FALSE, NULL, "dnc_");
-          }
-          // reset template variable since that won't be of any use, and could be misleading
-          $this->assign("dnc_viewCustomData", NULL);
-        }
+    if (!empty($defaults['address'])) {
+      foreach ($defaults['address'] as & $val) {
+        CRM_Utils_Array::lookupValue($val, 'location_type', CRM_Core_PseudoConstant::get('CRM_Core_DAO_Address', 'location_type_id', ['labelColumn' => 'display_name']), FALSE);
       }
+
+      foreach ($defaults['address'] as $blockId => $blockVal) {
+        $idValue = $blockVal['id'];
+        if (!empty($blockVal['master_id'])) {
+          $idValue = $blockVal['master_id'];
+        }
+        $groupTree = CRM_Core_BAO_CustomGroup::getTree(ucfirst('address'), NULL, $idValue, NULL, [],
+          NULL, TRUE, NULL, FALSE, CRM_Core_Permission::VIEW);
+        // we setting the prefix to dnc_ below so that we don't overwrite smarty's grouptree var.
+        $defaults['address'][$blockId]['custom'] = CRM_Core_BAO_CustomGroup::buildCustomDataView($this, $groupTree, FALSE, NULL, "dnc_");
+      }
+      // reset template variable since that won't be of any use, and could be misleading
+      $this->assign("dnc_viewCustomData", NULL);
     }
 
     $defaults['gender_display'] = CRM_Core_PseudoConstant::getLabel('CRM_Contact_DAO_Contact', 'gender_id', $defaults['gender_id'] ?? NULL);
@@ -476,6 +438,47 @@ class CRM_Contact_Page_View_Summary extends CRM_Contact_Page_View {
     // now sort the tabs based on weight
     usort($allTabs, ['CRM_Utils_Sort', 'cmpFunc']);
     return $allTabs;
+  }
+
+  /**
+   * Get the values for the location entity for this contact.
+   *
+   * The form layer requires that we put the label values into keys too.
+   * Unfortunately smarty can't handle {$location_type_id:label} - ie
+   * the colon - so we need to map the value over in the php layer.
+   *
+   * @param int $contact_id
+   * @param string $entity
+   *
+   * @return array
+   * @throws \CRM_Core_Exception
+   */
+  protected function getLocationValues(int $contact_id, string $entity): array {
+    $fieldMap = [
+      'location_type_id' => 'location_type',
+      'provider_id' => 'provider',
+      'phone_type_id' => 'phone_type',
+      'website_type_id' => 'website_type',
+    ];
+    $optionFields = array_keys((array) civicrm_api4($entity, 'getFields', [
+      'where' => [['options', 'IS NOT EMPTY'], ['name', 'IN', array_keys($fieldMap)]],
+    ], 'name'));
+    $select = ['*', 'custom.*'];
+    foreach ($optionFields as $optionField) {
+      $select[] = $optionField . ':label';
+    }
+    $locationEntities = (array) civicrm_api4($entity, 'get', [
+      'select' => $select,
+      'where' => [['contact_id', '=', $contact_id]],
+      'orderBy' => $entity === 'Website' ? [] : ['is_primary' => 'DESC'],
+    ], 'id');
+
+    foreach ($locationEntities as $index => $locationEntity) {
+      foreach ($optionFields as $optionField) {
+        $locationEntities[$index][$fieldMap[$optionField]] = $locationEntity[$optionField . ':label'];
+      }
+    }
+    return $locationEntities;
   }
 
 }

@@ -161,20 +161,26 @@ class CRM_Utils_Date {
    */
   public static function getAbbrWeekdayNames() {
     $key = 'abbrDays_' . \CRM_Core_I18n::getLocale();
-    $days = &\Civi::$statics[__CLASS__][$key];
-    if (!$days) {
-      $days = [];
+    if (empty(\Civi::$statics[__CLASS__][$key])) {
+      $intl_formatter = IntlDateFormatter::create(CRM_Core_I18n::getLocale(), IntlDateFormatter::MEDIUM, IntlDateFormatter::MEDIUM, NULL, IntlDateFormatter::GREGORIAN, 'E');
+      $days = [
+        0 => $intl_formatter->format(strtotime('Sunday')),
+        1 => $intl_formatter->format(strtotime('Monday')),
+        2 => $intl_formatter->format(strtotime('Tuesday')),
+        3 => $intl_formatter->format(strtotime('Wednesday')),
+        4 => $intl_formatter->format(strtotime('Thursday')),
+        5 => $intl_formatter->format(strtotime('Friday')),
+        6 => $intl_formatter->format(strtotime('Saturday')),
+      ];
       // First day of the week
       $firstDay = Civi::settings()->get('weekBegins');
 
-      // set LC_TIME and build the arrays from locale-provided names
-      // June 1st, 1970 was a Monday
-      CRM_Core_I18n::setLcTime();
-      for ($i = $firstDay; count($days) < 7; $i = $i > 5 ? 0 : $i + 1) {
-        $days[$i] = strftime('%a', mktime(0, 0, 0, 6, $i, 1970));
+      \Civi::$statics[__CLASS__][$key] = [];
+      for ($i = $firstDay; count(\Civi::$statics[__CLASS__][$key]) < 7; $i = $i > 5 ? 0 : $i + 1) {
+        \Civi::$statics[__CLASS__][$key][$i] = $days[$i];
       }
     }
-    return $days;
+    return \Civi::$statics[__CLASS__][$key];
   }
 
   /**
@@ -192,20 +198,26 @@ class CRM_Utils_Date {
    */
   public static function getFullWeekdayNames() {
     $key = 'fullDays_' . \CRM_Core_I18n::getLocale();
-    $days = &\Civi::$statics[__CLASS__][$key];
-    if (!$days) {
-      $days = [];
+    if (empty(\Civi::$statics[__CLASS__][$key])) {
+      $intl_formatter = IntlDateFormatter::create(CRM_Core_I18n::getLocale(), IntlDateFormatter::MEDIUM, IntlDateFormatter::MEDIUM, NULL, IntlDateFormatter::GREGORIAN, 'EEEE');
+      $days = [
+        0 => $intl_formatter->format(strtotime('Sunday')),
+        1 => $intl_formatter->format(strtotime('Monday')),
+        2 => $intl_formatter->format(strtotime('Tuesday')),
+        3 => $intl_formatter->format(strtotime('Wednesday')),
+        4 => $intl_formatter->format(strtotime('Thursday')),
+        5 => $intl_formatter->format(strtotime('Friday')),
+        6 => $intl_formatter->format(strtotime('Saturday')),
+      ];
       // First day of the week
       $firstDay = Civi::settings()->get('weekBegins');
 
-      // set LC_TIME and build the arrays from locale-provided names
-      // June 1st, 1970 was a Monday
-      CRM_Core_I18n::setLcTime();
-      for ($i = $firstDay; count($days) < 7; $i = $i > 5 ? 0 : $i + 1) {
-        $days[$i] = strftime('%A', mktime(0, 0, 0, 6, $i, 1970));
+      \Civi::$statics[__CLASS__][$key] = [];
+      for ($i = $firstDay; count(\Civi::$statics[__CLASS__][$key]) < 7; $i = $i > 5 ? 0 : $i + 1) {
+        \Civi::$statics[__CLASS__][$key][$i] = $days[$i];
       }
     }
-    return $days;
+    return \Civi::$statics[__CLASS__][$key];
   }
 
   /**
@@ -219,19 +231,27 @@ class CRM_Utils_Date {
    */
   public static function &getAbbrMonthNames($month = FALSE) {
     $key = 'abbrMonthNames_' . \CRM_Core_I18n::getLocale();
-    $abbrMonthNames = &\Civi::$statics[__CLASS__][$key];
-    if (!isset($abbrMonthNames)) {
-
-      // set LC_TIME and build the arrays from locale-provided names
-      CRM_Core_I18n::setLcTime();
-      for ($i = 1; $i <= 12; $i++) {
-        $abbrMonthNames[$i] = strftime('%b', mktime(0, 0, 0, $i, 10, 1970));
-      }
+    if (empty(\Civi::$statics[__CLASS__][$key])) {
+      $intl_formatter = IntlDateFormatter::create(CRM_Core_I18n::getLocale(), IntlDateFormatter::MEDIUM, IntlDateFormatter::MEDIUM, NULL, IntlDateFormatter::GREGORIAN, 'MMM');
+      \Civi::$statics[__CLASS__][$key] = [
+        1 => $intl_formatter->format(strtotime('1 January')),
+        2 => $intl_formatter->format(strtotime('1 February')),
+        3 => $intl_formatter->format(strtotime('1 March')),
+        4 => $intl_formatter->format(strtotime('1 April')),
+        5 => $intl_formatter->format(strtotime('1 May')),
+        6 => $intl_formatter->format(strtotime('1 June')),
+        7 => $intl_formatter->format(strtotime('1 July')),
+        8 => $intl_formatter->format(strtotime('1 August')),
+        9 => $intl_formatter->format(strtotime('1 September')),
+        10 => $intl_formatter->format(strtotime('1 October')),
+        11 => $intl_formatter->format(strtotime('1 November')),
+        12 => $intl_formatter->format(strtotime('1 December')),
+      ];
     }
     if ($month) {
-      return $abbrMonthNames[$month];
+      return \Civi::$statics[__CLASS__][$key][$month];
     }
-    return $abbrMonthNames;
+    return \Civi::$statics[__CLASS__][$key];
   }
 
   /**
@@ -287,7 +307,8 @@ class CRM_Utils_Date {
 
   /**
    * Create a date and time string in a provided format.
-   *
+   * %A - Full day name ('Saturday'..'Sunday')
+   * %a - abbreviated day name ('Sat'..'Sun')
    * %b - abbreviated month name ('Jan'..'Dec')
    * %B - full month name ('January'..'December')
    * %d - day of the month as a decimal number, 0-padded ('01'..'31')
@@ -318,6 +339,11 @@ class CRM_Utils_Date {
     // 1-based (January) month names arrays
     $abbrMonths = self::getAbbrMonthNames();
     $fullMonths = self::getFullMonthNames();
+    $fullWeekdayNames = self::getFullWeekdayNames();
+    $abbrWeekdayNames = self::getAbbrWeekdayNames();
+
+    // backwards compatibility with %D being the equivalent of %m/%d/%y
+    $format = str_replace('%D', '%m/%d/%y', ($format ?? ''));
 
     if (!$format) {
       $config = CRM_Core_Config::singleton();
@@ -337,16 +363,16 @@ class CRM_Utils_Date {
         }
       }
       else {
-        if (strpos($dateString, '-')) {
+        if (strpos(($dateString ?? ''), '-')) {
           $month = (int) substr($dateString, 5, 2);
           $day = (int) substr($dateString, 8, 2);
         }
         else {
-          $month = (int) substr($dateString, 4, 2);
-          $day = (int) substr($dateString, 6, 2);
+          $month = (int) substr(($dateString ?? ''), 4, 2);
+          $day = (int) substr(($dateString ?? ''), 6, 2);
         }
 
-        if (strlen($dateString) > 10) {
+        if (strlen(($dateString ?? '')) > 10) {
           $format = $config->dateformatDatetime;
         }
         elseif ($day > 0) {
@@ -369,6 +395,7 @@ class CRM_Utils_Date {
 
         $hour24 = (int) substr($dateString, 11, 2);
         $minute = (int) substr($dateString, 14, 2);
+        $second = (int) substr($dateString, 17, 2);
       }
       else {
         $year = (int) substr($dateString, 0, 4);
@@ -377,7 +404,10 @@ class CRM_Utils_Date {
 
         $hour24 = (int) substr($dateString, 8, 2);
         $minute = (int) substr($dateString, 10, 2);
+        $second = (int) substr($dateString, 12, 2);
       }
+
+      $dayInt = date('w', strtotime($dateString));
 
       if ($day % 10 == 1 and $day != 11) {
         $suffix = 'st';
@@ -412,6 +442,8 @@ class CRM_Utils_Date {
       }
 
       $date = [
+        '%A' => $fullWeekdayNames[$dayInt] ?? NULL,
+        '%a' => $abbrWeekdayNames[$dayInt] ?? NULL,
         '%b' => $abbrMonths[$month] ?? NULL,
         '%B' => $fullMonths[$month] ?? NULL,
         '%d' => $day > 9 ? $day : '0' . $day,
@@ -428,15 +460,16 @@ class CRM_Utils_Date {
         '%i' => $minute > 9 ? $minute : '0' . $minute,
         '%p' => strtolower($type),
         '%P' => $type,
-        '%A' => $type,
         '%Y' => $year,
+        '%y' => substr($year, 2),
+        '%s' => str_pad($second, 2, 0, STR_PAD_LEFT),
+        '%S' => str_pad($second, 2, 0, STR_PAD_LEFT),
+        '%Z' => date('T', strtotime($dateString)),
       ];
 
       return strtr($format, $date);
     }
-    else {
-      return '';
-    }
+    return '';
   }
 
   /**
@@ -479,12 +512,12 @@ class CRM_Utils_Date {
    *   date/datetime in ISO format
    */
   public static function mysqlToIso($mysql) {
-    $year = substr($mysql, 0, 4);
-    $month = substr($mysql, 4, 2);
-    $day = substr($mysql, 6, 2);
-    $hour = substr($mysql, 8, 2);
-    $minute = substr($mysql, 10, 2);
-    $second = substr($mysql, 12, 2);
+    $year = substr(($mysql ?? ''), 0, 4);
+    $month = substr(($mysql ?? ''), 4, 2);
+    $day = substr(($mysql ?? ''), 6, 2);
+    $hour = substr(($mysql ?? ''), 8, 2);
+    $minute = substr(($mysql ?? ''), 10, 2);
+    $second = substr(($mysql ?? ''), 12, 2);
 
     $iso = '';
     if ($year) {
@@ -523,7 +556,7 @@ class CRM_Utils_Date {
    */
   public static function isoToMysql($iso) {
     $dropArray = ['-' => '', ':' => '', ' ' => ''];
-    return strtr($iso, $dropArray);
+    return strtr(($iso ?? ''), $dropArray);
   }
 
   /**
@@ -541,7 +574,7 @@ class CRM_Utils_Date {
   public static function convertToDefaultDate(&$params, $dateType, $dateParam) {
     $now = getdate();
 
-    $value = NULL;
+    $value = '';
     if (!empty($params[$dateParam])) {
       // suppress hh:mm or hh:mm:ss if it exists CRM-7957
       $value = preg_replace("/(\s(([01]\d)|[2][0-3])(:([0-5]\d)){1,2})$/", "", $params[$dateParam]);
@@ -874,8 +907,8 @@ class CRM_Utils_Date {
     if ($relative) {
       list($term, $unit) = explode('.', $relative, 2);
       $dateRange = self::relativeToAbsolute($term, $unit);
-      $from = substr($dateRange['from'], 0, 8);
-      $to = substr($dateRange['to'], 0, 8);
+      $from = substr(($dateRange['from'] ?? ''), 0, 8);
+      $to = substr(($dateRange['to'] ?? ''), 0, 8);
       // @todo fix relativeToAbsolute & add tests
       // relativeToAbsolute returns 8 char date strings
       // or 14 char date + time strings.
@@ -1934,7 +1967,7 @@ class CRM_Utils_Date {
       $mysqlDate = 'null';
     }
 
-    if (trim($date)) {
+    if (trim($date ?? '')) {
       $mysqlDate = date($format, strtotime($date . ' ' . $time));
     }
 
@@ -2101,15 +2134,23 @@ class CRM_Utils_Date {
   }
 
   /**
+   * Date formatting for imports where date format is specified.
+   *
+   * Note this is used for imports (only) because the importer can
+   * specify the format.
+   *
+   * Tests are in CRM_Utils_DateTest::testFormatDate
+   *
    * @param $date
+   *   Date string as entered.
    * @param $dateType
+   *   One of the constants like CRM_Core_Form_Date::DATE_yyyy_mm_dd.
    *
    * @return null|string
    */
   public static function formatDate($date, $dateType) {
-    $formattedDate = NULL;
     if (empty($date)) {
-      return $formattedDate;
+      return NULL;
     }
 
     // 1. first convert date to default format.
@@ -2122,32 +2163,28 @@ class CRM_Utils_Date {
 
     if (CRM_Utils_Date::convertToDefaultDate($dateParams, $dateType, $dateKey)) {
       $dateVal = $dateParams[$dateKey];
-      $ruleName = 'date';
       if ($dateType == 1) {
         $matches = [];
-        if (preg_match("/(\s(([01]\d)|[2][0-3]):([0-5]\d))$/", $date, $matches)) {
-          $ruleName = 'dateTime';
+        // The seconds part of this regex is not quite right - but it does succeed
+        // in clarifying whether there is a time component or not - which is all it is meant
+        // to do.
+        if (preg_match('/(\s(([01]\d)|[2][0-3]):([0-5]\d):?[0-5]?\d?)$/', $date, $matches)) {
           if (strpos($date, '-') !== FALSE) {
             $dateVal .= array_shift($matches);
           }
+          if (!CRM_Utils_Rule::dateTime($dateVal)) {
+            return NULL;
+          }
+          $dateVal = CRM_Utils_Date::customFormat(preg_replace("/(:|\s)?/", '', $dateVal), '%Y%m%d%H%i%s');
+          return $dateVal;
         }
       }
 
       // validate date.
-      $valid = CRM_Utils_Rule::$ruleName($dateVal);
-
-      if ($valid) {
-        // format date and time to default.
-        if ($ruleName == 'dateTime') {
-          $dateVal = CRM_Utils_Date::customFormat(preg_replace("/(:|\s)?/", "", $dateVal), '%Y%m%d%H%i');
-          // hack to add seconds
-          $dateVal .= '00';
-        }
-        $formattedDate = $dateVal;
-      }
+      return CRM_Utils_Rule::date($dateVal) ? $dateVal : NULL;
     }
 
-    return $formattedDate;
+    return NULL;
   }
 
   /**
@@ -2213,6 +2250,59 @@ class CRM_Utils_Date {
     $systemTimeZone = new DateTimeZone(CRM_Core_Config::singleton()->userSystem->getTimeZoneString());
     $dateObject->setTimezone($systemTimeZone);
     return $dateObject->format($format);
+  }
+
+  /**
+   * Check if the value returned by a date picker has a date section (ie: includes
+   * a '-' character) if it includes a time section (ie: includes a ':').
+   *
+   * @param string $value
+   *   A date/time string input from a datepicker value.
+   *
+   * @return bool
+   *   TRUE if valid, FALSE if there is a time without a date.
+   */
+  public static function datePickerValueWithTimeHasDate($value) {
+    // If there's no : (time) or a : and a - (date) then return true
+    return (
+      strpos($value, ':') === FALSE
+      || strpos($value, ':') !== FALSE && strpos($value, '-') !== FALSE
+    );
+  }
+
+  /**
+   * Validate start and end dates entered on a form to make sure they are
+   * logical. Expects the form keys to be start_date and end_date.
+   *
+   * @param string $startFormKey
+   *   The form element key of the 'start date'
+   * @param string $startValue
+   *   The value of the 'start date'
+   * @param string $endFormKey
+   *   The form element key of the 'end date'
+   * @param string $endValue
+   * The value of the 'end date'
+   *
+   * @return array|bool
+   *   TRUE if valid, an array of the erroneous form key, and error message to
+   *   use otherwise.
+   */
+  public static function validateStartEndDatepickerInputs($startFormKey, $startValue, $endFormKey, $endValue) {
+
+    // Check date as well as time is set
+    if (!empty($startValue) && !self::datePickerValueWithTimeHasDate($startValue)) {
+      return ['key' => $startFormKey, 'message' => ts('Please enter a date as well as a time.')];
+    }
+    if (!empty($endValue) && !self::datePickerValueWithTimeHasDate($endValue)) {
+      return ['key' => $endFormKey, 'message' => ts('Please enter a date as well as a time.')];
+    }
+
+    // Check end date is after start date
+    if (!empty($startValue) && !empty($endValue) && $endValue < $startValue) {
+      return ['key' => $endFormKey, 'message' => ts('The end date should be after the start date.')];
+    }
+
+    return TRUE;
   }
 
 }
