@@ -28,6 +28,8 @@ pantheon.upstream.yml
 # Logs and databases #
 ######################
 *.log
+*.sql
+!**/tests/**/*.sql
 
 # OS generated files #
 ######################
