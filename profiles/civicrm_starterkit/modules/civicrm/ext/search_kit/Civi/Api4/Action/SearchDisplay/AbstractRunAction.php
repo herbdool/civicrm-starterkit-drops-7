@@ -319,7 +319,11 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
   }
 
   /**
-   * Evaluates conditional style rules
+   * Add icons to a column
+   *
+   * Note: Only one icon is allowed per side (left/right).
+   * If more than one per side is given, latter icons are treated as fallbacks
+   * and only shown if prior ones are missing.
    *
    * @param array{icon: string, field: string, if: array, side: string}[] $icons
    * @param array $data
@@ -327,20 +331,23 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
    */
   protected function getColumnIcons(array $icons, array $data) {
     $result = [];
-    foreach ($icons as $icon) {
+    // Reverse order so latter icons become fallbacks and earlier ones take priority
+    foreach (array_reverse($icons) as $icon) {
       $iconClass = $icon['icon'] ?? NULL;
-      if (!$iconClass && !empty($icon['field'])) {
-        $iconClass = $data[$icon['field']] ?? NULL;
+      if (!$iconClass && !empty($icon['field']) && !empty($data[$icon['field']])) {
+        // Icon field may be multivalued e.g. contact_sub_type
+        $iconClass = \CRM_Utils_Array::first(array_filter((array) $data[$icon['field']]));
       }
       if ($iconClass) {
         $condition = $this->getRuleCondition($icon['if'] ?? []);
         if (!is_null($condition[0]) && !(self::filterCompare($data, $condition))) {
           continue;
         }
-        $result[] = ['class' => $iconClass, 'side' => $icon['side'] ?? 'left'];
+        $side = $icon['side'] ?? 'left';
+        $result[$side] = ['class' => $iconClass, 'side' => $side];
       }
     }
-    return $result;
+    return array_values($result);
   }
 
   /**
@@ -807,12 +814,16 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
       return;
     }
 
+    // Add all filters to the WHERE or HAVING clause
     foreach ($filters as $key => $value) {
       $fieldNames = explode(',', $key);
       if (in_array($key, $allowedFilters, TRUE) || !array_diff($fieldNames, $allowedFilters)) {
         $this->applyFilter($fieldNames, $value);
       }
-      // Filter labels are used to set the page title for drilldown forms
+    }
+    // After adding filters, set filter labels
+    // Filter labels are used to set the page title for drilldown forms
+    foreach ($filters as $key => $value) {
       if (in_array($key, $directiveFilters, TRUE)) {
         $this->addFilterLabel($key, $value);
       }
@@ -1196,15 +1207,19 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
     if ($field['name'] === $idField) {
       $field['fk_entity'] = $field['entity'];
     }
-    if (!empty($field['options'])) {
-      $options = civicrm_api4($field['entity'], 'getFields', [
+    else {
+      // Reload field with options and any dynamic FKs based on values (e.g. entity_table)
+      $field = civicrm_api4($field['entity'], 'getFields', [
         'loadOptions' => TRUE,
         'checkPermissions' => FALSE,
+        'values' => $this->getWhereClauseValues(),
         'where' => [['name', '=', $field['name']]],
-      ])->first()['options'] ?? [];
+      ])->first();
+    }
+    if (!empty($field['options'])) {
       foreach ((array) $value as $val) {
-        if (!empty($options[$val])) {
-          $this->filterLabels[] = $options[$val];
+        if (!empty($field['options'][$val])) {
+          $this->filterLabels[] = $field['options'][$val];
         }
       }
     }
@@ -1224,6 +1239,21 @@ abstract class AbstractRunAction extends \Civi\Api4\Generic\AbstractAction {
         }
       }
     }
+  }
+
+  /**
+   * Returns any key/value pairs in the WHERE clause (those using the `=` operator)
+   *
+   * @return array
+   */
+  private function getWhereClauseValues(): array {
+    $values = [];
+    foreach ($this->_apiParams['where'] as $clause) {
+      if (count($clause) > 2 && $clause[1] === '=' && empty($clause[3]) && strpos('(', $clause[0]) === FALSE) {
+        $values[$clause[0]] = $clause[2];
+      }
+    }
+    return $values;
   }
 
   /**

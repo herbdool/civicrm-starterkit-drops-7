@@ -1619,7 +1619,7 @@ CREATE TABLE `civicrm_job_log` (
   `name` varchar(255) COMMENT 'Title of the job',
   `command` varchar(255) COMMENT 'Full path to file containing job script',
   `description` varchar(255) COMMENT 'Title line of log entry',
-  `data` text COMMENT 'Potential extended data for specific job run (e.g. tracebacks).',
+  `data` longtext COMMENT 'Potential extended data for specific job run (e.g. tracebacks).',
   PRIMARY KEY (`id`),
   CONSTRAINT FK_civicrm_job_log_domain_id FOREIGN KEY (`domain_id`) REFERENCES `civicrm_domain`(`id`)
 )
@@ -1993,7 +1993,7 @@ ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci ROW_FORMA
 CREATE TABLE `civicrm_website` (
   `id` int unsigned NOT NULL AUTO_INCREMENT COMMENT 'Unique Website ID',
   `contact_id` int unsigned COMMENT 'FK to Contact ID',
-  `url` varchar(128) COMMENT 'Website',
+  `url` varchar(255) COMMENT 'Website',
   `website_type_id` int unsigned COMMENT 'Which Website type does this website belong to.',
   PRIMARY KEY (`id`),
   INDEX `UI_website_type_id`(website_type_id),

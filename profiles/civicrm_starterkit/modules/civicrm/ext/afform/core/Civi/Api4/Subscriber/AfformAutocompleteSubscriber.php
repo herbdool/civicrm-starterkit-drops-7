@@ -11,10 +11,10 @@
 
 namespace Civi\Api4\Subscriber;
 
+use Civi\Core\Service\AutoService;
 use Civi\Afform\FormDataModel;
 use Civi\API\Events;
 use Civi\Api4\Afform;
-use Civi\Core\Service\AutoService;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -22,7 +22,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * @service
  * @internal
  */
-class AutocompleteSubscriber extends AutoService implements EventSubscriberInterface {
+class AfformAutocompleteSubscriber extends AutoService implements EventSubscriberInterface {
 
   /**
    * @return array
@@ -37,7 +37,7 @@ class AutocompleteSubscriber extends AutoService implements EventSubscriberInter
    * @param \Civi\API\Event\PrepareEvent $event
    *   API preparation event.
    */
-  public function onApiPrepare(\Civi\API\Event\PrepareEvent $event) {
+  public function onApiPrepare(\Civi\API\Event\PrepareEvent $event): void {
     $apiRequest = $event->getApiRequest();
     if (is_object($apiRequest) && is_a($apiRequest, 'Civi\Api4\Generic\AutocompleteAction')) {
       $formName = $apiRequest->getFormName();

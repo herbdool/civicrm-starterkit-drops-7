@@ -55,6 +55,7 @@ return [
           ],
           'pager' => [
             'show_count' => TRUE,
+            'expose_limit' => TRUE,
           ],
           'placeholder' => 5,
           'sort' => [
@@ -108,7 +109,7 @@ return [
               'editable' => TRUE,
             ],
             [
-              'size' => 'btn-sm',
+              'size' => 'btn-xs',
               'links' => [
                 [
                   'entity' => 'ContactType',
