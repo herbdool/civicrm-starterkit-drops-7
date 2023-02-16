@@ -192,7 +192,7 @@ class Container {
       // For Caches that we don't really care about the ttl for and/or maybe accessed
       // fairly often we use the fastArrayDecorator which improves reads and writes, these
       // caches should also not have concurrency risk.
-      $fastArrayCaches = ['groups', 'navigation', 'customData', 'fields', 'contactTypes', 'metadata'];
+      $fastArrayCaches = ['groups', 'navigation', 'customData', 'fields', 'contactTypes', 'metadata', 'js_strings'];
       if (in_array($cacheSvc, $fastArrayCaches)) {
         $definitionParams['withArray'] = 'fast';
       }
@@ -371,6 +371,10 @@ class Container {
       'CRM_Core_DomainTokens',
       []
     ))->addTag('kernel.event_subscriber')->setPublic(TRUE);
+    $container->setDefinition('crm_token_tidy', new Definition(
+      '\Civi\Token\TidySubscriber',
+      []
+    ))->addTag('kernel.event_subscriber')->setPublic(TRUE);
 
     $dispatcherDefn = $container->getDefinition('dispatcher');
     foreach (\CRM_Core_DAO_AllCoreTables::getBaoClasses() as $baoEntity => $baoClass) {
@@ -401,7 +405,7 @@ class Container {
   }
 
   /**
-   * @return \Symfony\Component\EventDispatcher\EventDispatcher
+   * @return \Civi\Core\CiviEventDispatcherInterface
    */
   public function createEventDispatcher() {
     // Continue building on the original dispatcher created during bootstrap.
@@ -490,7 +494,7 @@ class Container {
   }
 
   /**
-   * @param \Symfony\Component\EventDispatcher\EventDispatcher $dispatcher
+   * @param \Civi\Core\CiviEventDispatcherInterface $dispatcher
    * @param $magicFunctionProvider
    *
    * @return \Civi\API\Kernel
