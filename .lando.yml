@@ -1,0 +1,4 @@
+name: civicrm-starterkit
+recipe: drupal7
+config:
+  webroot: .

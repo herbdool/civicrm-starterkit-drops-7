@@ -33,7 +33,7 @@
 {/foreach}
 
 {if $isShowTax && '{contribution.tax_amount|raw}' !== '0.00'}
-{ts}Amount before Tax{/ts}: {$amount-$totalTaxAmount|crmMoney:$currency}
+{ts}Amount before Tax:{/ts} {$amount-$totalTaxAmount|crmMoney:$currency}
   {foreach from=$taxRateBreakdown item=taxDetail key=taxRate}
     {if $taxRate == 0}{ts}No{/ts} {$taxTerm}{else}{$taxTerm} {$taxDetail.percentage}%{/if} : {$taxDetail.amount|crmMoney:'{contribution.currency}'}
   {/foreach}
@@ -176,7 +176,7 @@
   {$contact_phone}
 {/if}
 {/if}
-{if !empty($is_deductible) AND !empty($price)}
+{if $is_deductible AND !empty($price)}
 
 {ts 1=$price|crmMoney:$currency}The value of this premium is %1. This may affect the amount of the tax deduction you can claim. Consult your tax advisor for more information.{/ts}{/if}
 {/if}

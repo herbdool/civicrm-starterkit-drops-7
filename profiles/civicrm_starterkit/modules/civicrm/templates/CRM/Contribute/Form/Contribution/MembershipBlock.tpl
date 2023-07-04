@@ -7,9 +7,8 @@
  | and copyright information, see https://civicrm.org/licensing       |
  +--------------------------------------------------------------------+
 *}
-{if !empty($useForMember) AND !$is_quick_config}
-  <div id="membership" class="crm-group membership-group">
-    {if $context EQ "makeContribution"}
+<div id="membership" class="crm-group membership-group">
+  {if $context EQ "makeContribution"}
       <div id="priceset">
         <fieldset>
           {if $renewal_mode}
@@ -34,7 +33,7 @@
           {if !empty($membershipTypes)}
             {foreach from=$membershipTypes item=row}
               {if array_key_exists( 'current_membership', $row )}
-                <div id='help'>
+                <div class='help'>
                   {* Lifetime memberships have no end-date so current_membership array key exists but is NULL *}
                   {if $row.current_membership}
                     {if $row.current_membership|crmDate:"%Y%m%d" LT $smarty.now|crmDate:"%Y%m%d"}
@@ -53,37 +52,35 @@
           {include file="CRM/Price/Form/PriceSet.tpl" extends="Membership"}
         </fieldset>
       </div>
-    {elseif $lineItem and $priceSetID AND !$is_quick_config}
-      {assign var="totalAmount" value=$amount}
-      <div class="header-dark">
-        {ts}Membership Fee{/ts}
-      </div>
-      <div class="display-block">
-        {include file="CRM/Price/Page/LineItem.tpl" context="Membership"}
-      </div>
-    {/if}
+    {literal}
+      <script type="text/javascript">
+        CRM.$(function($) {
+          //if price set is set we use below below code to show for showing auto renew
+          var autoRenewOption =  {/literal}'{$autoRenewOption}'{literal};
+          var autoRenew = $("#auto_renew_section");
+          var autoRenewCheckbox = $("#auto_renew");
+          var forceRenew = $("#force_renew");
+          autoRenew.hide();
+          forceRenew.hide();
+          if ( autoRenewOption == 1 ) {
+            autoRenew.show();
+          } else if ( autoRenewOption == 2 ) {
+            autoRenewCheckbox.prop('checked',  true );
+            autoRenewCheckbox.attr( 'readonly', true );
+            autoRenew.hide();
+            forceRenew.show();
+          }
+        });
+      </script>
+    {/literal}
+{elseif $membershipBlock and $lineItem and $priceSetID AND !$is_quick_config}
+  {assign var="totalAmount" value=$amount}
+  <div class="header-dark">
+    {ts}Membership Fee{/ts}
   </div>
-{literal}
-  <script type="text/javascript">
-    CRM.$(function($) {
-      //if price set is set we use below below code to show for showing auto renew
-      var autoRenewOption =  {/literal}'{$autoRenewOption}'{literal};
-      var autoRenew = $("#auto_renew_section");
-      var autoRenewCheckbox = $("#auto_renew");
-      var forceRenew = $("#force_renew");
-      autoRenew.hide();
-      forceRenew.hide();
-      if ( autoRenewOption == 1 ) {
-        autoRenew.show();
-      } else if ( autoRenewOption == 2 ) {
-        autoRenewCheckbox.prop('checked',  true );
-        autoRenewCheckbox.attr( 'readonly', true );
-        autoRenew.hide();
-        forceRenew.show();
-      }
-    });
-  </script>
-{/literal}
+  <div class="display-block">
+    {include file="CRM/Price/Page/LineItem.tpl" context="Membership"}
+  </div>
 {elseif $membershipBlock AND !$is_quick_config}
   <div id="membership" class="crm-group membership-group">
     {if $context EQ "makeContribution"}
@@ -134,7 +131,7 @@
   </div>
 
 {/if}{* membership block end here *}
-
+</div>
 {if $membershipBlock AND $is_quick_config}
   {if  $context neq "makeContribution" }
     <div class="header-dark">
@@ -158,6 +155,7 @@
       {foreach from=$membershipTypes item=row}
         <tr {if $context EQ "makeContribution"}class="odd-row" {/if}valign="top">
           {if $showRadio }
+            {* unreachable - show radio is never true *}
             {assign var="pid" value=$row.id}
             <td style="width: 1em;">{$form.selectMembership.$pid.html}</td>
           {else}
@@ -203,7 +201,7 @@
           </td>
         </tr>
       {/if}
-      {if $showRadio}
+      {if $showRadio}{* unreachable *}
         {if $showRadioNoThanks } {* Provide no-thanks option when Membership signup is not required - per membership block configuration. *}
           <tr class="odd-row">
             <td>{$form.selectMembership.no_thanks.html}</td>

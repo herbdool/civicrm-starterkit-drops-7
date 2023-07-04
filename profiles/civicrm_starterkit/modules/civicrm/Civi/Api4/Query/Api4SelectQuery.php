@@ -633,6 +633,10 @@ class Api4SelectQuery {
       return sprintf('%s %s "%s"', $fieldAlias, $operator, \CRM_Core_DAO::escapeString($value));
     }
 
+    if (!$value && ($operator === 'IN' || $operator === 'NOT IN')) {
+      $value[] = FALSE;
+    }
+
     if (is_bool($value)) {
       $value = (int) $value;
     }
@@ -829,7 +833,12 @@ class Api4SelectQuery {
         return FALSE;
       }
       foreach ([$sideA, $sideB] as $expr) {
+        // Check for explicit link to FK entity
         if ($expr === "$alias.id" || !empty($joinEntityFields[str_replace("$alias.", '', $expr)]['fk_entity'])) {
+          return TRUE;
+        }
+        // Check for dynamic FK
+        if ($expr === "$alias.entity_id") {
           return TRUE;
         }
       }
@@ -1337,10 +1346,11 @@ class Api4SelectQuery {
    */
   protected function renderExpr($expr) {
     $exprVal = explode(':', $expr->getExpr())[0];
-    // If this expression is already in use in the select clause, use the existing alias
-    // This allows calculated fields to be reused in SELECT, GROUP BY and ORDER BY
+    // If this expression is already aliased in the select clause, use the existing alias.
+    // This allows calculated fields to be reused in SELECT, GROUP BY and ORDER BY.
     foreach ($this->selectAliases as $alias => $selectVal) {
-      if ($exprVal === explode(':', $selectVal)[0]) {
+      $selectVal = explode(':', $selectVal)[0];
+      if ($alias !== $selectVal && $exprVal === $selectVal) {
         return "`$alias`";
       }
     }

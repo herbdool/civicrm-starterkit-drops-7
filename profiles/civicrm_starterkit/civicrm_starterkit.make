@@ -4,9 +4,10 @@
 ; This is used to test the packaging BEFORE committing
 ; drush make --no-core civicrm_starterkit.make
 
-; @todo add to commit notes:
-; upgrade extensions (sometimes core extensions are also included):
-; terminus drush site:env cvapi Extension.upgrade
+; Upgrade extensions (sometimes core extensions are also included):
+; terminus drush site.env cvapi Extension.upgrade
+; Upgrade CiviCRM core:
+; terminus drush site.env civicrm-upgrade-db
 
 core = 7.92
 api = 2
@@ -17,7 +18,7 @@ projects[drupal][version] = "7.92"
 ; ====== CIVICRM RELATED =========
 
 libraries[civicrm][download][type] = get
-libraries[civicrm][download][url] = "https://download.civicrm.org/civicrm-5.58.1-drupal.tar.gz"
+libraries[civicrm][download][url] = "https://download.civicrm.org/civicrm-5.62.1-drupal.tar.gz"
 libraries[civicrm][destination] = modules
 libraries[civicrm][directory_name] = civicrm
 

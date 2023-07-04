@@ -214,7 +214,8 @@ VALUES
    ('contribution_recur_status'     , '{ts escape="sql"}Recurring Contribution Status{/ts}'      , NULL,      1, 1, 1, 'name,label,description', NULL),
    ('environment'                   , '{ts escape="sql"}Environment{/ts}'                        , NULL,      1, 1, 0, 'name,label,description', NULL),
    ('activity_default_assignee'     , '{ts escape="sql"}Activity default assignee{/ts}'          , NULL,      1, 1, 0, 'name,label,description', NULL),
-   ('entity_batch_extends'          , '{ts escape="sql"}Entity Batch Extends{/ts}'               , NULL,      1, 1, 0, 'name,label,description', NULL);
+   ('entity_batch_extends'          , '{ts escape="sql"}Entity Batch Extends{/ts}'               , NULL,      1, 1, 0, 'name,label,description', NULL),
+   ('file_type'                     , '{ts escape="sql"}File Type{/ts}'                          , 'Integer', 1, 1, 0, 'name,label,description', NULL);
 
 SELECT @option_group_id_pcm            := max(id) from civicrm_option_group where name = 'preferred_communication_method';
 SELECT @option_group_id_act            := max(id) from civicrm_option_group where name = 'activity_type';
@@ -597,8 +598,8 @@ VALUES
   (@option_group_id_report , '{ts escape="sql"}SYBUNT Report{/ts}',                           'contribute/sybunt',              'CRM_Report_Form_Contribute_Sybunt',              NULL, 0, 0, 12, '{ts escape="sql"}SYBUNT means some year(s) but not this year. Provides a list of constituents who donated at some time in the history of your organization but did not donate during the time period you specify.{/ts}', 0, 0, 1, @contributeCompId, NULL, NULL),
   (@option_group_id_report , '{ts escape="sql"}LYBUNT Report{/ts}',                           'contribute/lybunt',              'CRM_Report_Form_Contribute_Lybunt',              NULL, 0, 0, 13, '{ts escape="sql"}LYBUNT means last year but not this year. Provides a list of constituents who donated last year but did not donate during the time period you specify as the current year.{/ts}', 0, 0, 1, @contributeCompId, NULL, NULL),
   (@option_group_id_report , '{ts escape="sql"}Soft Credit Report{/ts}',                      'contribute/softcredit',          'CRM_Report_Form_Contribute_SoftCredit',          NULL, 0, 0, 14, '{ts escape="sql"}Shows contributions made by contacts that have been soft-credited to other contacts.{/ts}', 0, 0, 1,@contributeCompId, NULL, NULL),
-  (@option_group_id_report , '{ts escape="sql"}Membership Report (Summary){/ts}',             'member/summary',                 'CRM_Report_Form_Member_Summary',                 NULL, 0, 0, 15, '{ts escape="sql"}Provides a summary of memberships by type and join date.{/ts}', 0, 0, 1, @memberCompId, NULL, NULL),
-  (@option_group_id_report , '{ts escape="sql"}Membership Report (Detail){/ts}',              'member/detail',                  'CRM_Report_Form_Member_Detail',                  NULL, 0, 0, 16, '{ts escape="sql"}Provides a list of members along with their membership status and membership details (Join Date, Start Date, End Date). Can also display contributions (payments) associated with each membership.{/ts}', 0, 0, 1, @memberCompId, NULL, NULL),
+  (@option_group_id_report , '{ts escape="sql"}Membership Report (Summary){/ts}',             'member/summary',                 'CRM_Report_Form_Member_Summary',                 NULL, 0, 0, 15, '{ts escape="sql"}Provides a summary of memberships by type and Member Since.{/ts}', 0, 0, 1, @memberCompId, NULL, NULL),
+  (@option_group_id_report , '{ts escape="sql"}Membership Report (Detail){/ts}',              'member/detail',                  'CRM_Report_Form_Member_Detail',                  NULL, 0, 0, 16, '{ts escape="sql"}Provides a list of members along with their membership status and membership details (Member Since, Membership Start Date, Membership Expiration Date). Can also display contributions (payments) associated with each membership.{/ts}', 0, 0, 1, @memberCompId, NULL, NULL),
   (@option_group_id_report , '{ts escape="sql"}Membership Report (Lapsed){/ts}',              'member/lapse',                   'CRM_Report_Form_Member_Lapse',                   NULL, 0, 0, 17, '{ts escape="sql"}Provides a list of memberships that lapsed or will lapse before the date you specify.{/ts}', 0, 0, 1, @memberCompId, NULL, NULL),
   (@option_group_id_report , '{ts escape="sql"}Event Participant Report (List){/ts}',         'event/participantListing',       'CRM_Report_Form_Event_ParticipantListing',       NULL, 0, 0, 18, '{ts escape="sql"}Provides lists of participants for an event.{/ts}', 0, 0, 1, @eventCompId, NULL, NULL),
   (@option_group_id_report , '{ts escape="sql"}Event Income Report (Summary){/ts}',           'event/summary',                  'CRM_Report_Form_Event_Summary',                  NULL, 0, 0, 19, '{ts escape="sql"}Provides an overview of event income. You can include key information such as event ID, registration, attendance, and income generated to help you determine the success of an event.{/ts}', 0, 0, 1, @eventCompId, NULL, NULL),
@@ -1754,10 +1755,10 @@ VALUES
 -- CRM-9714
 
 INSERT INTO `civicrm_price_set` ( `name`, `title`, `is_active`, `extends`, `is_quick_config`, `financial_type_id`, `is_reserved` )
-VALUES ( 'default_contribution_amount', 'Contribution Amount', '1', '2', '1', NULL,1),
-( 'default_membership_type_amount', 'Membership Amount', '1', '3', '1', @financial_type_id_md,1);
+VALUES ( 'default_contribution_amount', 'Contribution Amount', '1', '2', '1', NULL, 1),
+( 'default_membership_type_amount', 'Membership Amount', '1', '3', '1', @financial_type_id_md, 1);
 
-SELECT @setID := max(id) FROM civicrm_price_set WHERE name = 'default_contribution_amount' AND extends = 2 AND is_quick_config = 1 ;
+SELECT @setID := max(id) FROM civicrm_price_set WHERE name = 'default_contribution_amount' AND is_quick_config = 1;
 
 INSERT INTO `civicrm_price_field` (`price_set_id`, `name`, `label`, `html_type`,`weight`, `is_display_amounts`, `options_per_line`, `is_active`, `is_required`,`visibility_id` )
 VALUES ( @setID, 'contribution_amount', 'Contribution Amount', 'Text', '1', '1', '1', '1', '1', '1' );
