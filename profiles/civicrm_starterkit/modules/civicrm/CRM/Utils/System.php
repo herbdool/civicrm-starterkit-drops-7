@@ -482,7 +482,7 @@ class CRM_Utils_System {
   public static function setTitle($title, $pageTitle = NULL) {
     self::$title = $title;
     $config = CRM_Core_Config::singleton();
-    return $config->userSystem->setTitle($title, $pageTitle);
+    return $config->userSystem->setTitle(CRM_Utils_String::purifyHtml($title), CRM_Utils_String::purifyHtml($pageTitle));
   }
 
   /**
@@ -1405,7 +1405,7 @@ class CRM_Utils_System {
       return NULL;
     }
 
-    if (CRM_Utils_Array::value('resource', $params) == 'wiki') {
+    if (($params['resource'] ?? NULL) == 'wiki') {
       $docBaseURL = self::getWikiBaseURL();
     }
     else {

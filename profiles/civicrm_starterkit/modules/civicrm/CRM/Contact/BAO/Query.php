@@ -4261,7 +4261,7 @@ WHERE  $smartGroupClause
 
     // Description
     if (!empty($description[2]) && trim($description[2])) {
-      $this->_qill[$grouping][] = ts('Relationship description - ' . $description[2]);
+      $this->_qill[$grouping][] = ts('Relationship description - %1', [1 => $description[2]]);
       $description = CRM_Core_DAO::escapeString(trim($description[2]));
       $where[$grouping][] = "civicrm_relationship.description LIKE '%{$description}%'";
     }
@@ -6556,7 +6556,7 @@ AND   displayRelType.is_active = 1
     }
     $pseudoConstant = $realField['pseudoconstant'];
     if (empty($pseudoConstant['optionGroupName']) &&
-      CRM_Utils_Array::value('labelColumn', $pseudoConstant) !== 'name') {
+      ($pseudoConstant['labelColumn'] ?? NULL) !== 'name') {
       // We are increasing our pseudoconstant handling - but still very cautiously,
       // hence the check for labelColumn === name
       return FALSE;
@@ -6990,8 +6990,8 @@ AND   displayRelType.is_active = 1
    */
   protected function isPseudoFieldAnFK($fieldSpec) {
     if (empty($fieldSpec['FKClassName'])
-      || CRM_Utils_Array::value('keyColumn', $fieldSpec['pseudoconstant']) !== 'id'
-      || CRM_Utils_Array::value('labelColumn', $fieldSpec['pseudoconstant']) !== 'name') {
+      || ($fieldSpec['pseudoconstant']['keyColumn'] ?? NULL) !== 'id'
+      || ($fieldSpec['pseudoconstant']['labelColumn'] ?? NULL) !== 'name') {
       return FALSE;
     }
     return TRUE;

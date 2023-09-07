@@ -544,6 +544,9 @@ WHERE  id = %1";
    * @param bool $doNotIncludeExpiredFields
    * @param int $priceSetId
    *   Price Set ID
+   *
+   * @throws \CRM_Core_Exception
+   * @deprecated in CiviCRM 5.58, will be removed around CiviCRM 5.70.
    */
   public static function initSet(&$form, $entityTable = 'civicrm_event', $doNotIncludeExpiredFields = FALSE, $priceSetId = NULL) {
     CRM_Core_Error::deprecatedFunctionWarning('no alternative');
@@ -591,7 +594,7 @@ WHERE  id = %1";
       $form->_values['fee'] = $form->_priceSet['fields'] ?? NULL;
 
       //get the price set fields participant count.
-      if ($entityTable == 'civicrm_event') {
+      if ($entityTable === 'civicrm_event') {
         //get option count info.
         $form->_priceSet['optionsCountTotal'] = self::getPricesetCount($priceSetId);
         if ($form->_priceSet['optionsCountTotal']) {
@@ -1570,7 +1573,7 @@ WHERE     ct.id = cp.financial_type_id AND
         CRM_Price_BAO_LineItem::format($id, $params, $field, $lineItem);
         $optionValueId = key($field['options']);
 
-        if (CRM_Utils_Array::value('name', $field['options'][$optionValueId]) === 'contribution_amount') {
+        if (($field['options'][$optionValueId]['name'] ?? NULL) === 'contribution_amount') {
           $taxRates = CRM_Core_PseudoConstant::getTaxRates();
           if (array_key_exists($params['financial_type_id'], $taxRates)) {
             $field['options'][key($field['options'])]['tax_rate'] = $taxRates[$params['financial_type_id']];
@@ -1650,8 +1653,8 @@ WHERE     ct.id = cp.financial_type_id AND
     $adminFieldVisible = CRM_Core_Permission::check('administer CiviCRM');
     $checklifetime = FALSE;
     foreach ($feeBlock as $id => $field) {
-      if (CRM_Utils_Array::value('visibility', $field) == 'public' ||
-        (CRM_Utils_Array::value('visibility', $field) == 'admin' && $adminFieldVisible == TRUE) ||
+      if (($field['visibility'] ?? NULL) == 'public' ||
+        (($field['visibility'] ?? NULL) == 'admin' && $adminFieldVisible == TRUE) ||
         !$validFieldsOnly
       ) {
         $options = $field['options'] ?? NULL;

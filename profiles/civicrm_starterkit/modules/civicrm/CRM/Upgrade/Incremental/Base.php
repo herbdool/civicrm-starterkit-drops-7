@@ -9,6 +9,7 @@
  +--------------------------------------------------------------------+
  */
 
+use Civi\Core\Exception\DBQueryException;
 use Civi\Core\SettingsBag;
 
 /**
@@ -563,6 +564,18 @@ class CRM_Upgrade_Incremental_Base {
   }
 
   /**
+   * Drop a table if it exists.
+   *
+   * @param CRM_Queue_TaskContext $ctx
+   * @param string $tableName
+   * @return bool
+   */
+  public static function dropTable($ctx, $tableName) {
+    CRM_Core_BAO_SchemaHandler::dropTable($tableName);
+    return TRUE;
+  }
+
+  /**
    * Drop a table... but only if it's empty.
    *
    * @param CRM_Queue_TaskContext $ctx
@@ -609,7 +622,12 @@ class CRM_Upgrade_Incremental_Base {
       $queries[] = "ALTER TABLE `$table` CHANGE `$column` `$column` $properties";
     }
     foreach ($queries as $query) {
-      CRM_Core_DAO::executeQuery($query, [], TRUE, NULL, FALSE, FALSE);
+      try {
+        CRM_Core_DAO::executeQuery($query, [], TRUE, NULL, FALSE, FALSE);
+      }
+      catch (DBQueryException $e) {
+        throw new CRM_Core_Exception($e->getSQLErrorCode() . "\n" . $e->getDebugInfo());
+      }
     }
     $schema = new CRM_Logging_Schema();
     if ($schema->isEnabled()) {

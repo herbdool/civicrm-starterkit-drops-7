@@ -392,6 +392,8 @@ class SearchRunTest extends Api4TestBase implements TransactionalInterface {
     ];
     $result = civicrm_api4('SearchDisplay', 'run', $params);
 
+    $this->assertEquals($contacts[0], $result[0]['key']);
+
     // Contact 1 first name can be updated
     $this->assertEquals('One', $result[0]['columns'][0]['val']);
     $this->assertEquals($contacts[0], $result[0]['columns'][0]['edit']['record']['id']);
@@ -406,7 +408,7 @@ class SearchRunTest extends Api4TestBase implements TransactionalInterface {
     $this->assertEquals('testmail@unit.test', $result[0]['columns'][1]['val']);
     $this->assertEquals($email, $result[0]['columns'][1]['edit']['record']['id']);
     $this->assertEquals('Email', $result[0]['columns'][1]['edit']['entity']);
-    $this->assertEquals('Text', $result[0]['columns'][1]['edit']['input_type']);
+    $this->assertEquals('Email', $result[0]['columns'][1]['edit']['input_type']);
     $this->assertEquals('String', $result[0]['columns'][1]['edit']['data_type']);
     $this->assertEquals('email', $result[0]['columns'][1]['edit']['value_key']);
     $this->assertEquals('update', $result[0]['columns'][1]['edit']['action']);
@@ -436,7 +438,7 @@ class SearchRunTest extends Api4TestBase implements TransactionalInterface {
     $this->assertNull($result[1]['columns'][1]['val']);
     $this->assertEquals(['contact_id' => $contacts[1], 'is_primary' => TRUE], $result[1]['columns'][1]['edit']['record']);
     $this->assertEquals('Email', $result[1]['columns'][1]['edit']['entity']);
-    $this->assertEquals('Text', $result[1]['columns'][1]['edit']['input_type']);
+    $this->assertEquals('Email', $result[1]['columns'][1]['edit']['input_type']);
     $this->assertEquals('String', $result[1]['columns'][1]['edit']['data_type']);
     $this->assertEquals('email', $result[1]['columns'][1]['edit']['value_key']);
     $this->assertEquals('create', $result[1]['columns'][1]['edit']['action']);
@@ -1342,6 +1344,7 @@ class SearchRunTest extends Api4TestBase implements TransactionalInterface {
     // Second Individual
     $expectedFirstNameEdit['record']['id'] = $contact[1]['id'];
     $expectedFirstNameEdit['value'] = NULL;
+    $this->assertEquals($contact[1]['id'], $result[1]['key']);
     $this->assertEquals($expectedFirstNameEdit, $result[1]['columns'][0]['edit']);
     $this->assertTrue(!isset($result[1]['columns'][1]['edit']));
     $this->assertTrue(!isset($result[1]['columns'][2]['edit']));
@@ -1420,6 +1423,49 @@ class SearchRunTest extends Api4TestBase implements TransactionalInterface {
 
     $this->assertEquals('JPY', $result[0]['data']['contribution_id.currency']);
     $this->assertEquals('¥500', $result[0]['columns'][0]['val']);
+  }
+
+  public function testContributionAggregateCurrency():void {
+    $contributions = $this->saveTestRecords('Contribution', [
+      'records' => [
+        ['total_amount' => 100, 'currency' => 'GBP'],
+        ['total_amount' => 200, 'currency' => 'USD'],
+        ['total_amount' => 500, 'currency' => 'JPY'],
+        ['total_amount' => 200, 'currency' => 'USD'],
+      ],
+    ]);
+
+    $params = [
+      'checkPermissions' => FALSE,
+      'return' => 'page:1',
+      'savedSearch' => [
+        'api_entity' => 'Contribution',
+        'api_params' => [
+          'version' => 4,
+          'select' => ['SUM(total_amount) AS total', 'COUNT(id) AS count', 'currency'],
+          'where' => [['id', 'IN', $contributions->column('id')]],
+          'groupBy' => ['currency'],
+        ],
+      ],
+      'display' => NULL,
+      'sort' => [['currency', 'ASC']],
+    ];
+
+    $result = civicrm_api4('SearchDisplay', 'run', $params);
+    $this->assertCount(3, $result);
+
+    // Currency should have been used to format the aggregated values
+    $this->assertEquals('GBP', $result[0]['data']['currency']);
+    $this->assertEquals('£100.00', $result[0]['columns'][0]['val']);
+    $this->assertEquals(1, $result[0]['columns'][1]['val']);
+
+    $this->assertEquals('JPY', $result[1]['data']['currency']);
+    $this->assertEquals('¥500', $result[1]['columns'][0]['val']);
+    $this->assertEquals(1, $result[1]['columns'][1]['val']);
+
+    $this->assertEquals('USD', $result[2]['data']['currency']);
+    $this->assertEquals('$400.00', $result[2]['columns'][0]['val']);
+    $this->assertEquals(2, $result[2]['columns'][1]['val']);
   }
 
   public function testSelectEquations() {
@@ -1533,6 +1579,49 @@ class SearchRunTest extends Api4TestBase implements TransactionalInterface {
     $this->assertEquals('fa-user', $result[1]['columns'][0]['icons'][0]['class']);
     $this->assertEquals('Starry', $result[2]['columns'][0]['val']);
     $this->assertEquals('fa-star', $result[2]['columns'][0]['icons'][0]['class']);
+  }
+
+  public function testKeyIsReturned(): void {
+    $id = $this->createTestRecord('Email')['id'];
+    $params = [
+      'checkPermissions' => FALSE,
+      'return' => 'page:1',
+      'savedSearch' => [
+        'api_entity' => 'Email',
+        'api_params' => [
+          'version' => 4,
+          'select' => ['email'],
+          'where' => [
+            ['id', 'IN', [$id]],
+          ],
+        ],
+      ],
+      'display' => [
+        'type' => 'table',
+        'label' => '',
+        'settings' => [
+          'limit' => 20,
+          'pager' => TRUE,
+          'actions' => TRUE,
+          'columns' => [
+            [
+              'key' => 'email',
+              'label' => 'Email',
+              'dataType' => 'String',
+              'type' => 'field',
+            ],
+          ],
+          'sort' => [
+            ['id', 'ASC'],
+          ],
+        ],
+      ],
+      'afform' => NULL,
+    ];
+
+    $result = civicrm_api4('SearchDisplay', 'run', $params);
+    $this->assertCount(1, $result);
+    $this->assertEquals($id, $result[0]['key']);
   }
 
 }

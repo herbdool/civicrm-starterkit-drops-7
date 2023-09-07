@@ -44,8 +44,8 @@
         {if !$sections} {* section headers and sticky headers aren't playing nice yet *}
             <thead class="sticky">
             <tr>
-                {$tableHeader}
-        </tr>
+              {$tableHeader|smarty:nodefaults}
+            </tr>
         </thead>
         {/if}
 
@@ -127,7 +127,7 @@
                                 <span class="nowrap">{$row.$field|crmMoney}</span>
                            {/if}
                         {else}
-                            {$row.$field}
+                            {$row.$field|smarty:nodefaults|purify}
                         {/if}
 
                         {if array_key_exists($fieldLink, $row) && $row.$fieldLink}</a>{/if}

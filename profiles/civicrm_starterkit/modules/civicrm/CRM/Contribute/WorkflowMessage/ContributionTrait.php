@@ -4,7 +4,7 @@ use Civi\Api4\Membership;
 
 /**
  * @method array getContribution()
- * @method ?int getContributionID()
+ * @method int|null getContributionID()
  * @method $this setContributionID(?int $contributionId)
  */
 trait CRM_Contribute_WorkflowMessage_ContributionTrait {
@@ -21,7 +21,7 @@ trait CRM_Contribute_WorkflowMessage_ContributionTrait {
    * @var int
    * @scope tokenContext as contributionId, tplParams as contributionID
    */
-  public $contributionId;
+  public $contributionID;
 
   /**
    * Is the site configured such that tax should be displayed.
@@ -67,9 +67,14 @@ trait CRM_Contribute_WorkflowMessage_ContributionTrait {
    * @return \CRM_Financial_BAO_Order|null
    */
   private function getOrder(): ?CRM_Financial_BAO_Order {
-    if (!$this->order && $this->contributionId) {
+    if (!$this->order && $this->contributionID) {
       $this->order = new CRM_Financial_BAO_Order();
-      $this->order->setTemplateContributionID($this->contributionId);
+      $this->order->setTemplateContributionID($this->contributionID);
+      if (!empty($this->eventID)) {
+        // Temporary support for tests that are making a mess of this.
+        // It should always be possible to get this from the line items.
+        $this->order->setPriceSetIDByEventPageID($this->eventID);
+      }
     }
     return $this->order;
   }
@@ -147,11 +152,20 @@ trait CRM_Contribute_WorkflowMessage_ContributionTrait {
     }
     $this->taxRateBreakdown = [];
     foreach ($this->getLineItems() as $lineItem) {
-      $this->taxRateBreakdown[$lineItem['tax_rate']] = [
-        'amount' => $lineItem['tax_amount'] ?? 0,
-        'rate' => $lineItem['tax_rate'],
-        'percentage' => sprintf('%.2f', $lineItem['tax_rate']),
-      ];
+      if (!isset($this->taxRateBreakdown[$lineItem['tax_rate']])) {
+        $this->taxRateBreakdown[$lineItem['tax_rate']] = [
+          'amount' => 0,
+          'rate' => $lineItem['tax_rate'],
+          'percentage' => sprintf('%.2f', $lineItem['tax_rate']),
+        ];
+      }
+      $this->taxRateBreakdown[$lineItem['tax_rate']]['amount'] += $lineItem['tax_amount'] ?? 0;
+    }
+    // Remove the rates with no value.
+    foreach ($this->taxRateBreakdown as $rate => $details) {
+      if ($details['amount'] === 0.0) {
+        unset($this->taxRateBreakdown[$rate]);
+      }
     }
     if (array_keys($this->taxRateBreakdown) === [0]) {
       // If the only tax rate charged is 0% then no tax breakdown is returned.
@@ -170,7 +184,7 @@ trait CRM_Contribute_WorkflowMessage_ContributionTrait {
   public function setContribution(array $contribution): self {
     $this->contribution = $contribution;
     if (!empty($contribution['id'])) {
-      $this->contributionId = $contribution['id'];
+      $this->contributionID = $contribution['id'];
     }
     return $this;
   }

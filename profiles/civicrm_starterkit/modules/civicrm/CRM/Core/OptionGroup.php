@@ -160,9 +160,12 @@ WHERE  v.option_group_id = g.id
       $query .= $condition;
     }
 
-    $query .= " ORDER BY v.{$orderBy}";
+    $query .= " ORDER BY %2";
 
-    $p = [1 => [$name, 'String']];
+    $p = [
+      1 => [$name, 'String'],
+      2 => ['v.' . $orderBy, 'MysqlOrderBy'],
+    ];
     $dao = CRM_Core_DAO::executeQuery($query, $p);
 
     $var = self::valuesCommon($dao, $flip, $grouping, $localize, $labelColumnName);
@@ -543,7 +546,7 @@ WHERE  v.option_group_id = g.id
       ] as $fld) {
         $row[$fld] = $dao->$fld;
         if ($localize && in_array($fld, ['label', 'description'])) {
-          $row[$fld] = ts($row[$fld]);
+          $row[$fld] = _ts($row[$fld]);
         }
       }
     }

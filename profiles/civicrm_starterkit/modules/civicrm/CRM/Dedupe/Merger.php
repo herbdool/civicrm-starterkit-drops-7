@@ -233,9 +233,6 @@ class CRM_Dedupe_Merger {
     }
 
     CRM_Utils_Hook::merge('cidRefs', $contactReferences);
-    if ($contactReferences !== $coreReferences) {
-      CRM_Core_Error::deprecatedWarning("Deprecated hook ::merge in context of 'cidRefs. Use entityTypes instead.");
-    }
     \Civi::$statics[__CLASS__]['contact_references'] = $contactReferences;
     return \Civi::$statics[__CLASS__]['contact_references'];
   }
@@ -269,7 +266,8 @@ class CRM_Dedupe_Merger {
   public static function locTables() {
     static $locTables;
     if (!$locTables) {
-      $locTables = ['civicrm_email', 'civicrm_address', 'civicrm_phone'];
+      // should be in sync with getLocationBlockInfo
+      $locTables = ['civicrm_email', 'civicrm_address', 'civicrm_phone', 'civicrm_im', 'civicrm_website'];
 
       // Allow hook_civicrm_merge() to adjust $locTables
       CRM_Utils_Hook::merge('locTables', $locTables);
@@ -1544,12 +1542,12 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
         continue;
       }
       $rows["move_$field"] = [
-        'main' => self::getFieldValueAndLabel($field, $main)['label'],
-        'other' => self::getFieldValueAndLabel($field, $other)['label'],
+        'main' => self::getFieldValueAndLabel($field, $main, $checkPermissions)['label'],
+        'other' => self::getFieldValueAndLabel($field, $other, $checkPermissions)['label'],
         'title' => $fields[$field]['label'],
       ];
 
-      $value = self::getFieldValueAndLabel($field, $other)['value'];
+      $value = self::getFieldValueAndLabel($field, $other, $checkPermissions)['value'];
       //CRM-14334
       if ($value === NULL || $value === '') {
         $value = 'null';
@@ -1565,6 +1563,8 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
 
       // Display a checkbox to migrate, only if the values are different
       if ($value != $main[$field]) {
+        // Don't check source if main is empty, because the source of the other contact is not the source of the merged contact
+        $isChecked = ($field === 'source') ? FALSE : (!isset($main[$field]) || $main[$field] === '');
         $elements[] = [
           0 => 'advcheckbox',
           1 => "move_$field",
@@ -1572,7 +1572,7 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
           3 => NULL,
           4 => NULL,
           5 => $value,
-          'is_checked' => (!isset($main[$field]) || $main[$field] === ''),
+          'is_checked' => $isChecked,
         ];
       }
 
@@ -2599,7 +2599,7 @@ ORDER BY civicrm_custom_group.weight,
         }
 
         // For other locations, don't merge/add if the values are the same
-        elseif (CRM_Utils_Array::value('main', $migrationInfo['rows'][$key]) == $migrationInfo['rows'][$key]['other']) {
+        elseif (($migrationInfo['rows'][$key]['main'] ?? NULL) == $migrationInfo['rows'][$key]['other']) {
           unset($migrationInfo[$key]);
         }
       }
@@ -2768,14 +2768,15 @@ ORDER BY civicrm_custom_group.weight,
   /**
    * Get the field value & label for the given field.
    *
-   * @param $field
-   * @param $contact
+   * @param string $field
+   * @param array $contact
+   * @param bool $checkPermissions
    *
    * @return array
    * @throws \Exception
    */
-  private static function getFieldValueAndLabel($field, $contact): array {
-    $fields = self::getMergeFieldsMetadata();
+  private static function getFieldValueAndLabel(string $field, array $contact, bool $checkPermissions): array {
+    $fields = self::getMergeFieldsMetadata($checkPermissions);
     $value = $label = $contact[$field] ?? NULL;
     $fieldSpec = $fields[$field];
     if (!empty($fieldSpec['serialize']) && is_array($value)) {
