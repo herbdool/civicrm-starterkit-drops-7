@@ -147,7 +147,6 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
       'customPre_grouptitle',
       'customPost_grouptitle',
       'useForMember',
-      'membership_assign',
       'amount',
       'receipt_date',
       'is_pay_later',
@@ -261,7 +260,7 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
         if ($gId) {
           $email = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_UFGroup', $gId, 'notify');
           if ($email) {
-            $val = CRM_Core_BAO_UFGroup::checkFieldsEmptyValues($gId, $contactID, CRM_Utils_Array::value($key, $params), TRUE);
+            $val = CRM_Core_BAO_UFGroup::checkFieldsEmptyValues($gId, $contactID, $params[$key] ?? NULL, TRUE);
             CRM_Core_BAO_UFGroup::commonSendMail($contactID, $val);
           }
         }
@@ -291,7 +290,8 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
       //profile is of Individual ( including the custom data of membership/contribution )
       //IF Individual type not present in profile then it is consider as Organization data.
       $userID = $contactID;
-      if ($preID = CRM_Utils_Array::value('custom_pre_id', $values)) {
+      $preID = $values['custom_pre_id'] ?? NULL;
+      if ($preID) {
         if (!empty($values['related_contact'])) {
           $preProfileTypes = CRM_Core_BAO_UFGroup::profileGroups($preID);
           if (in_array('Individual', $preProfileTypes) || in_array('Contact', $preProfileTypes)) {
@@ -302,7 +302,8 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
         [$values['customPre_grouptitle'], $values['customPre']] = self::getProfileNameAndFields($preID, $userID, $params['custom_pre_id']);
       }
       $userID = $contactID;
-      if ($postID = CRM_Utils_Array::value('custom_post_id', $values)) {
+      $postID = $values['custom_post_id'] ?? NULL;
+      if ($postID) {
         if (!empty($values['related_contact'])) {
           $postProfileTypes = CRM_Core_BAO_UFGroup::profileGroups($postID);
           if (in_array('Individual', $postProfileTypes) || in_array('Contact', $postProfileTypes)) {
@@ -312,18 +313,14 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
         }
         [$values['customPost_grouptitle'], $values['customPost']] = self::getProfileNameAndFields($postID, $userID, $params['custom_post_id']);
       }
-      // Assign honoree values for the receipt. But first, stop any leaks from
-      // previously assigned values.
-      $template->assign('honoreeProfile', []);
-      $template->assign('honorName', NULL);
-      if (isset($values['honor'])) {
-        $honorValues = $values['honor'];
-        $template->_values = ['honoree_profile_id' => $values['honoree_profile_id']];
-        CRM_Contribute_BAO_ContributionSoft::formatHonoreeProfileFields(
-          $template,
-          $honorValues['honor_profile_values'],
-          $honorValues['honor_id']
-        );
+      // Assign honoree values for the receipt.
+      $honorValues = $values['honor'] ?? ['honor_profile_id' => NULL, 'honor_id' => NULL, 'honor_profile_values' => []];
+      foreach (CRM_Contribute_BAO_ContributionSoft::getHonorTemplateVariables(
+        $honorValues['honor_profile_id'] ? (int) $honorValues['honor_profile_id'] : NULL,
+        $honorValues['honor_id'] ? (int) $honorValues['honor_id'] : NULL,
+        $honorValues['honor_profile_values'] ?? [],
+      ) as $honorFieldName => $honorFieldValue) {
+        $template->assign($honorFieldName, $honorFieldValue);
       }
 
       $title = $values['title'] ?? CRM_Contribute_BAO_Contribution_Utils::getContributionPageTitle($values['contribution_page_id']);
@@ -349,7 +346,6 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
         'customPost' => $values['customPost'],
         'customPost_grouptitle' => $values['customPost_grouptitle'],
         'useForMember' => $values['useForMember'],
-        'membership_assign' => $values['membership_assign'],
         'amount' => $values['amount'],
         'is_pay_later' => $values['is_pay_later'],
         'receipt_date' => !$values['receipt_date'] ? NULL : date('YmdHis', strtotime($values['receipt_date'])),
@@ -367,12 +363,14 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
         $tplParams['contributionTypeName'] = $tplParams['financialTypeName'];
       }
 
-      if ($contributionPageId = CRM_Utils_Array::value('id', $values)) {
+      $contributionPageId = $values['id'] ?? NULL;
+      if ($contributionPageId) {
         $tplParams['contributionPageId'] = $contributionPageId;
       }
 
       // address required during receipt processing (pdf and email receipt)
-      if ($displayAddress = CRM_Utils_Array::value('address', $values)) {
+      $displayAddress = $values['address'] ?? NULL;
+      if ($displayAddress) {
         $tplParams['address'] = $displayAddress;
       }
 
@@ -401,13 +399,21 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
       }
 
       // use either the contribution or membership receipt, based on whether it’s a membership-related contrib or not
+      $tokenContext = ['contactId' => (int) $contactID];
+      if (!empty($tplParams['contributionID'])) {
+        $tokenContext['contributionId'] = $tplParams['contributionID'];
+      }
+      if (!empty($values['membership_id'])) {
+        $tokenContext['membershipId'] = $values['membership_id'];
+      }
       $sendTemplateParams = [
-        'workflow' => !empty($values['isMembership']) ? 'membership_online_receipt' : 'contribution_online_receipt',
+        'workflow' => !empty($values['membership_id']) ? 'membership_online_receipt' : 'contribution_online_receipt',
         'contactId' => $contactID,
         'tplParams' => $tplParams,
-        'tokenContext' => $tplParams['contributionID'] ? ['contributionId' => (int) $tplParams['contributionID'], 'contactId' => $contactID] : ['contactId' => $contactID],
+        'tokenContext' => $tokenContext,
         'isTest' => $isTest,
         'PDFFilename' => 'receipt.pdf',
+        'modelProps' => $values['modelProps'] ?? [],
       ];
 
       if ($returnMessageText) {
@@ -425,7 +431,7 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
       }
 
       if ($values['is_email_receipt']) {
-        $sendTemplateParams['from'] = CRM_Utils_Array::value('receipt_from_name', $values) . ' <' . $values['receipt_from_email'] . '>';
+        $sendTemplateParams['from'] = ($values['receipt_from_name'] ?? '') . ' <' . $values['receipt_from_email'] . '>';
         $sendTemplateParams['toName'] = $displayName;
         $sendTemplateParams['toEmail'] = $email;
         $sendTemplateParams['cc'] = $values['cc_receipt'] ?? NULL;
@@ -711,7 +717,7 @@ WHERE entity_table = 'civicrm_contribution_page'
 
     $copy->save();
 
-    CRM_Utils_Hook::copy('ContributionPage', $copy);
+    CRM_Utils_Hook::copy('ContributionPage', $copy, $id);
 
     return $copy;
   }

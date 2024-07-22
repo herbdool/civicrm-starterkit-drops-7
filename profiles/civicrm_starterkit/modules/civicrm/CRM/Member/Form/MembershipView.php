@@ -247,12 +247,12 @@ END AS 'relType'
       if (!empty($membershipType['relationship_type_id']) && empty($values['owner_membership_id'])) {
         // display related contacts/membership block
         $this->assign('has_related', TRUE);
-        $this->assign('max_related', CRM_Utils_Array::value('max_related', $values, ts('Unlimited')));
+        $this->assign('max_related', $values['max_related'] ?? ts('Unlimited'));
         // split the relations in 2 arrays based on direction
         $relTypeId = explode(CRM_Core_DAO::VALUE_SEPARATOR, $membershipType['relationship_type_id']);
         $relDirection = explode(CRM_Core_DAO::VALUE_SEPARATOR, $membershipType['relationship_direction']);
-        foreach ($relTypeId as $rid) {
-          $relTypeDir[substr($relDirection[0], 0, 1)][] = $rid;
+        foreach ($relTypeId as $x => $rid) {
+          $relTypeDir[substr($relDirection[$x], 0, 1)][] = $rid;
         }
         // build query in 2 parts with a UNION if necessary
         // _x and _y are replaced with _a and _b first, then vice-versa
@@ -403,7 +403,8 @@ SELECT r.id, c.id as cid, c.display_name as name, c.job_title as comment,
     $values['auto_renew'] = ($autoRenew && !$subscriptionCancelled) ? 'Yes' : 'No';
 
     //do check for campaigns
-    if ($campaignId = CRM_Utils_Array::value('campaign_id', $values)) {
+    $campaignId = $values['campaign_id'] ?? NULL;
+    if ($campaignId) {
       $campaigns = CRM_Campaign_BAO_Campaign::getCampaigns($campaignId);
       $values['campaign'] = $campaigns[$campaignId];
     }

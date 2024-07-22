@@ -118,7 +118,7 @@ class CRM_Core_BAO_Block {
    */
   public static function dataExists($blockFields, &$params) {
     foreach ($blockFields as $field) {
-      if (CRM_Utils_System::isNull(CRM_Utils_Array::value($field, $params))) {
+      if (CRM_Utils_System::isNull($params[$field] ?? NULL)) {
         return FALSE;
       }
     }
@@ -208,8 +208,8 @@ class CRM_Core_BAO_Block {
 
     $contactId = $params['contact_id'];
 
-    $updateBlankLocInfo = CRM_Utils_Array::value('updateBlankLocInfo', $params, FALSE);
-    $isIdSet = CRM_Utils_Array::value('isIdSet', $params[$blockName], FALSE);
+    $updateBlankLocInfo = $params['updateBlankLocInfo'] ?? FALSE;
+    $isIdSet = $params[$blockName]['isIdSet'] ?? FALSE;
 
     //get existing block ids.
     $blockIds = self::getBlockIds($blockName, $contactId, $entityElements);
@@ -232,11 +232,11 @@ class CRM_Core_BAO_Block {
       // if in some cases (eg. email used in Online Conribution Page, Profiles, etc.) id is not set
       // lets try to add using the previous method to avoid any false creation of existing data.
       foreach ($blockIds as $blockId => $blockValue) {
-        if (empty($value['id']) && $blockValue['locationTypeId'] == CRM_Utils_Array::value('location_type_id', $value) && !$isIdSet) {
+        if (empty($value['id']) && $blockValue['locationTypeId'] == ($value['location_type_id'] ?? NULL) && !$isIdSet) {
           $valueId = FALSE;
           if ($blockName == 'phone') {
             $phoneTypeBlockValue = $blockValue['phoneTypeId'] ?? NULL;
-            if ($phoneTypeBlockValue == CRM_Utils_Array::value('phone_type_id', $value)) {
+            if ($phoneTypeBlockValue == ($value['phone_type_id'] ?? NULL)) {
               $valueId = TRUE;
             }
           }
@@ -385,7 +385,7 @@ class CRM_Core_BAO_Block {
        * is_primary to 1
        * @see https://issues.civicrm.org/jira/browse/CRM-10451
        */
-      if ($existingEntities->N == 1 && $existingEntities->id == CRM_Utils_Array::value('id', $params)) {
+      if ($existingEntities->N == 1 && $existingEntities->id == ($params['id'] ?? NULL)) {
         $params['is_primary'] = 1;
         return;
       }

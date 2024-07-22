@@ -63,18 +63,13 @@ class CRM_Upgrade_Incremental_php_FiveSixtyFour extends CRM_Upgrade_Incremental_
     }
   }
 
-  public function upgrade_5_64_1($rev): void {
-    // This index isn't really needed, and it was only created on some sites. See: dev/core#4472
-    $this->addTask('Drop "civicrm_acl.index_priority"', 'dropIndex', 'civicrm_acl', 'index_priority');
-  }
-
   public static function updateLogging($ctx): bool {
     if (\Civi::settings()->get('logging')) {
       $dsn = defined('CIVICRM_LOGGING_DSN') ? CRM_Utils_SQL::autoSwitchDSN(CIVICRM_LOGGING_DSN) : CRM_Utils_SQL::autoSwitchDSN(CIVICRM_DSN);
       $dsn = DB::parseDSN($dsn);
       $table = '`' . $dsn['database'] . '`.`log_civicrm_uf_group`';
       CRM_Core_DAO::executeQuery("ALTER TABLE $table CHANGE `post_URL` `post_url` varchar(255) DEFAULT NULL COMMENT 'Redirect to URL on submit.',
-CHANGE `cancel_URL` `cancel_url` varchar(255) DEFAULT NULL COMMENT 'Redirect to URL when Cancel button clicked.'");
+CHANGE `cancel_URL` `cancel_url` varchar(255) DEFAULT NULL COMMENT 'Redirect to URL when Cancel button clicked.'", [], TRUE, NULL, FALSE, FALSE);
     }
     return TRUE;
   }

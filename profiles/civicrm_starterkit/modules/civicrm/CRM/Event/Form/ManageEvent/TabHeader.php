@@ -17,6 +17,8 @@
 
 /**
  * Helper class to build navigation links
+ *
+ * @deprecated since 5.72 will be removed around 5.78.
  */
 class CRM_Event_Form_ManageEvent_TabHeader {
 
@@ -25,14 +27,17 @@ class CRM_Event_Form_ManageEvent_TabHeader {
    *
    * @return array
    * @throws \CRM_Core_Exception
+   *
+   * @deprecated since 5.72 will be removed around 5.78.
    */
   public static function build(&$form) {
+    CRM_Core_Error::deprecatedWarning('no alternative');
     $tabs = $form->get('tabHeader');
     if (!$tabs || empty($_GET['reset'])) {
       $tabs = self::process($form);
       $form->set('tabHeader', $tabs);
     }
-    $form->assign_by_ref('tabHeader', $tabs);
+    $form->assign('tabHeader', $tabs);
     CRM_Core_Resources::singleton()
       ->addScriptFile('civicrm', 'templates/CRM/common/TabHeader.js', 1, 'html-header')
       ->addSetting([
@@ -49,8 +54,11 @@ class CRM_Event_Form_ManageEvent_TabHeader {
    *
    * @return array
    * @throws Exception
+   *
+   * @deprecated since 5.72 will be removed around 5.78.
    */
   public static function process(&$form) {
+    CRM_Core_Error::deprecatedWarning('no alternative');
     if ($form->getVar('_id') <= 0) {
       return NULL;
     }
@@ -76,7 +84,7 @@ class CRM_Event_Form_ManageEvent_TabHeader {
     if (CRM_Core_Permission::check('administer CiviCRM data') || !empty($permissions[CRM_Core_Permission::EDIT])) {
       $tabs['reminder'] = ['title' => ts('Schedule Reminders'), 'class' => 'livePage'] + $default;
     }
-    $tabs['conference'] = ['title' => ts('Conference Slots')] + $default;
+
     $tabs['friend'] = ['title' => ts('Tell a Friend')] + $default;
     $tabs['pcp'] = ['title' => ts('Personal Campaigns')] + $default;
     $tabs['repeat'] = ['title' => ts('Repeat')] + $default;
@@ -86,18 +94,9 @@ class CRM_Event_Form_ManageEvent_TabHeader {
       unset($tabs['repeat']['class']);
     }
 
-    // @todo Move to eventcart extension
-    // check if we're in shopping cart mode for events
-    if (!(bool) Civi::settings()->get('enable_cart')) {
-      unset($tabs['conference']);
-    }
-
     $eventID = $form->getVar('_id');
     if ($eventID) {
       // disable tabs based on their configuration status
-      $eventNameMapping = CRM_Utils_Array::first(CRM_Core_BAO_ActionSchedule::getMappings([
-        'id' => CRM_Event_ActionMapping::EVENT_NAME_MAPPING_ID,
-      ]));
       $sql = "
 SELECT     e.loc_block_id as is_location, e.is_online_registration, e.is_monetary, taf.is_active, pcp.is_active as is_pcp, sch.id as is_reminder, re.id as is_repeating_event
 FROM       civicrm_event e
@@ -111,7 +110,7 @@ WHERE      e.id = %1
       CRM_Core_BAO_RecurringEntity::getParentFor($eventID, 'civicrm_event');
       $params = [
         1 => [$eventID, 'Integer'],
-        2 => [$eventNameMapping->getId(), 'Integer'],
+        2 => [CRM_Event_ActionMapping::EVENT_NAME_MAPPING_ID, 'Integer'],
       ];
       $dao = CRM_Core_DAO::executeQuery($sql, $params);
       if (!$dao->fetch()) {
@@ -203,8 +202,11 @@ WHERE      e.id = %1
 
   /**
    * @param CRM_Event_Form_ManageEvent $form
+   *
+   * @deprecated since 5.72 will be removed around 5.78.
    */
   public static function reset(&$form) {
+    CRM_Core_Error::deprecatedWarning('no alternative');
     $tabs = self::process($form);
     $form->set('tabHeader', $tabs);
   }
@@ -213,8 +215,11 @@ WHERE      e.id = %1
    * @param $tabs
    *
    * @return int|string
+   *
+   * @deprecated since 5.72 will be removed around 5.78.
    */
   public static function getCurrentTab($tabs) {
+    CRM_Core_Error::deprecatedWarning('no alternative');
     static $current = FALSE;
 
     if ($current) {
@@ -230,7 +235,7 @@ WHERE      e.id = %1
       }
     }
 
-    $current = $current ? $current : 'settings';
+    $current = $current ?: 'settings';
     return $current;
   }
 

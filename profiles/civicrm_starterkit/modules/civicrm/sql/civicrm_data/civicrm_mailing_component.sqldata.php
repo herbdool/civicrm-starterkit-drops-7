@@ -1,8 +1,8 @@
 <?php
 
-$subgroup = '{subscribe.group}';
+$subgroup = '{group.frontend_title}';
 $suburl = '{subscribe.url}';
-$welgroup = '{welcome.group}';
+$welgroup = '{group.frontend_title}';
 $unsubgroup = '{unsubscribe.group}';
 $actresub = '{action.resubscribe}';
 $actresuburl = '{action.resubscribeUrl}';
@@ -24,8 +24,8 @@ return CRM_Core_CodeGen_SqlData::create('civicrm_mailing_component')
       'name' => ts("Mailing Footer"),
       "component_type" => "Footer",
       'subject' => ts("Descriptive Title for this Footer."),
-      'body_html' => ts('Sample Footer for HTML formatted content<br/><a href="{action.optOutUrl}">Unsubscribe</a>  <br/> {domain.address}'),
-      'body_text' => ts("to unsubscribe: {action.optOutUrl}\n{domain.address}"),
+      'body_html' => ts('Sample Footer for HTML formatted content<br/><a href="{action.optOutUrl}">Opt out of any future emails</a>  <br/> {domain.address}'),
+      'body_text' => ts("Opt out of any future emails: {action.optOutUrl}\n{domain.address}"),
     ],
     [
       'name' => ts('Subscribe Message'),

@@ -58,10 +58,10 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
    * @var array[]
    */
   public static $_dataToHTML = [
-    'String' => ['Text', 'Select', 'Radio', 'CheckBox', 'Autocomplete-Select'],
-    'Int' => ['Text', 'Select', 'Radio'],
-    'Float' => ['Text', 'Select', 'Radio'],
-    'Money' => ['Text', 'Select', 'Radio'],
+    'String' => ['Text', 'Select', 'Radio', 'CheckBox', 'Autocomplete-Select', 'Hidden'],
+    'Int' => ['Text', 'Select', 'Radio', 'Hidden'],
+    'Float' => ['Text', 'Select', 'Radio', 'Hidden'],
+    'Money' => ['Text', 'Select', 'Radio', 'Hidden'],
     'Memo' => ['TextArea', 'RichTextEditor'],
     'Date' => ['Select Date'],
     'Boolean' => ['Radio'],
@@ -170,6 +170,7 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
       $defaults['note_columns'] = 60;
       $defaults['note_rows'] = 4;
       $defaults['is_view'] = 0;
+      $defaults['fk_entity_on_delete'] = CRM_Core_DAO_CustomField::fields()['fk_entity_on_delete']['default'];
 
       if (CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomGroup', $this->_gid, 'is_multiple')) {
         $defaults['in_selector'] = 1;
@@ -193,7 +194,7 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
    */
   public function buildQuickForm() {
     if ($this->_gid) {
-      $this->_title = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomGroup', $this->_gid, 'title');
+      $this->_title = CRM_Core_BAO_CustomGroup::getGroup(['id' => $this->_gid])['title'];
       $this->setTitle($this->_title . ' - ' . ($this->_id ? ts('Edit Field') : ts('New Field')));
     }
     $this->assign('gid', $this->_gid);
@@ -238,7 +239,10 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
       'select' => ['minimumInputLength' => 0],
     ]);
 
-    if ($this->_action == CRM_Core_Action::UPDATE) {
+    $this->addField('fk_entity_on_delete');
+
+    $isUpdateAction = $this->_action == CRM_Core_Action::UPDATE;
+    if ($isUpdateAction) {
       $this->freeze('data_type');
       if (!empty($this->_values['option_group_id'])) {
         $this->assign('hasOptionGroup', in_array($this->_values['html_type'], self::$htmlTypesWithOptions));
@@ -247,12 +251,10 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
         $optionGroupParams['id'] = $this->_values['option_group_id'];
         $optionGroupParams['options']['or'] = [["is_reserved", "id"]];
       }
-      $this->assign('originalHtmlType', $this->_values['html_type']);
-      $this->assign('originalSerialize', $this->_values['serialize']);
-      if (!empty($this->_values['serialize'])) {
-        $this->assign('existingMultiValueCount', $this->getMultiValueCount());
-      }
     }
+    $this->assign('existingMultiValueCount', ($isUpdateAction && !empty($this->_values['serialize'])) ? $this->getMultiValueCount() : NULL);
+    $this->assign('originalSerialize', $isUpdateAction ? $this->_values['serialize'] : NULL);
+    $this->assign('originalHtmlType', $isUpdateAction ? $this->_values['html_type'] : NULL);
 
     // Retrieve optiongroups for selection list
     $optionGroupMetadata = civicrm_api3('OptionGroup', 'get', $optionGroupParams);
@@ -421,9 +423,6 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
     );
     $this->addRule('weight', ts('is a numeric field'), 'numeric');
 
-    // is required ?
-    $this->add('advcheckbox', 'is_required', ts('Required?'));
-
     // checkbox / radio options per line
     $this->add('number', 'options_per_line', ts('Options Per Line'), ['min' => 0]);
     $this->addRule('options_per_line', ts('must be a numeric value'), 'numeric');
@@ -439,20 +438,11 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
       $attributes['help_post']
     );
 
-    // is active ?
-    $this->add('advcheckbox', 'is_active', ts('Active?'));
-
-    // is active ?
-    $this->add('advcheckbox', 'is_view', ts('View Only?'));
-
-    // is searchable ?
-    $this->addElement('advcheckbox',
-      'is_searchable',
-      ts('Is this Field Searchable?')
-    );
-
-    // is searchable by range?
-    $this->addRadio('is_search_range', ts('Search by Range?'), [ts('No'), ts('Yes')]);
+    $this->add('advcheckbox', 'is_required', ts('Required'));
+    $this->addElement('advcheckbox', 'is_searchable', ts('Optimize for Search'));
+    $this->addRadio('is_search_range', ts('Search by Range'), [ts('No'), ts('Yes')]);
+    $this->add('advcheckbox', 'is_active', ts('Active'));
+    $this->add('advcheckbox', 'is_view', ts('View Only'));
 
     $buttons = [
       [
@@ -827,7 +817,7 @@ AND    option_group_id = %2";
           $options = array_map(['CRM_Core_DAO', 'escapeString'], array_filter($fields['option_value'], 'strlen'));
           $optionQuery = '"' . implode('","', $options) . '"';
         }
-        $table = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomGroup', $self->_gid, 'table_name');
+        $table = CRM_Core_BAO_CustomGroup::getGroup(['id' => $self->_gid])['table_name'];
         $column = $self->_values['column_name'];
         $invalid = CRM_Core_DAO::singleValueQuery("SELECT COUNT(*) FROM `$table` WHERE `$column` NOT IN ($optionQuery)");
         if ($invalid) {
@@ -849,9 +839,9 @@ AND    option_group_id = %2";
     $params = $this->controller->exportValues($this->_name);
     self::clearEmptyOptions($params);
 
-    //fix for 'is_search_range' field.
+    // Automatically disable 'is_search_range' if the field does not support it
     if (in_array($params['data_type'], ['Int', 'Float', 'Money', 'Date'])) {
-      if (empty($params['is_searchable']) || in_array($params['html_type'], ['Radio', 'Select'])) {
+      if (in_array($params['html_type'], ['Radio', 'Select'])) {
         $params['is_search_range'] = 0;
       }
     }
@@ -863,7 +853,7 @@ AND    option_group_id = %2";
 
     $filter = 'null';
     if ($params['data_type'] == 'ContactReference' && !empty($params['filter_selected'])) {
-      if ($params['filter_selected'] == 'Advance' && trim(CRM_Utils_Array::value('filter', $params))) {
+      if ($params['filter_selected'] == 'Advance' && trim($params['filter'] ?? '')) {
         $filter = trim($params['filter']);
       }
       elseif ($params['filter_selected'] == 'Group' && !empty($params['group_id'])) {
@@ -945,7 +935,7 @@ AND    option_group_id = %2";
    * @throws CRM_Core_Exception
    */
   public function getMultiValueCount() {
-    $table = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomGroup', $this->_gid, 'table_name');
+    $table = CRM_Core_BAO_CustomGroup::getGroup(['id' => $this->_gid])['table_name'];
     $column = $this->_values['column_name'];
     $sp = CRM_Core_DAO::VALUE_SEPARATOR;
     $sql = "SELECT COUNT(*) FROM `$table` WHERE `$column` LIKE '{$sp}%{$sp}%{$sp}'";

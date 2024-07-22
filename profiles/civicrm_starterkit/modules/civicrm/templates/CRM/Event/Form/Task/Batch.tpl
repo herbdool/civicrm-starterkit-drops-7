@@ -24,9 +24,6 @@
         </div>
       {/if}
     {else}
-      {if $statusProfile EQ 1} {* Update Participant Status in batch task *}
-        <div class="status">{$status}</div>
-      {/if}
       {ts}Update field values for each participant as needed. To set a field to the same value for ALL rows, enter that value for the first participation and then click the
         <strong>Copy icon</strong>
         (next to the column title).{/ts}
@@ -60,7 +57,7 @@
                 {* CRM-19860 Copied from templates/CRM/Contact/Form/Task/Batch.tpl *}
                 {if $field.options_per_line}
                   <td class="compressed">
-                    {assign var="count" value="1"}
+                    {assign var="count" value=1}
                     {strip}
                       <table class="form-layout-compressed">
                       <tr>
@@ -72,9 +69,9 @@
                             {if $count == $field.options_per_line}
                             </tr>
                             <tr>
-                              {assign var="count" value="1"}
+                              {assign var="count" value=1}
                               {else}
-                              {assign var="count" value=`$count+1`}
+                              {assign var="count" value=$count+1}
                             {/if}
                           {/if}
                         {/foreach}

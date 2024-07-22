@@ -203,15 +203,15 @@ class CRM_Event_Form_ManageEvent_Fee extends CRM_Event_Form_ManageEvent {
       $defaults['pay_later_text'] = ts('I will send payment by check');
     }
 
-    $this->_showHide = new CRM_Core_ShowHideBlocks();
+    $showHide = new CRM_Core_ShowHideBlocks();
     if (!$defaults['is_monetary']) {
-      $this->_showHide->addHide('event-fees');
+      $showHide->addHide('event-fees');
     }
 
     if (isset($defaults['price_set_id'])) {
-      $this->_showHide->addHide('map-field');
+      $showHide->addHide('map-field');
     }
-    $this->_showHide->addToTemplate();
+    $showHide->addToTemplate();
     $this->assign('inDate', $this->_inDate);
     if (!empty($defaults['payment_processor'])) {
       $defaults['payment_processor'] = array_fill_keys(explode(CRM_Core_DAO::VALUE_SEPARATOR,
@@ -246,14 +246,15 @@ class CRM_Event_Form_ManageEvent_Fee extends CRM_Event_Form_ManageEvent {
     );
 
     // financial type
-    if (!CRM_Financial_BAO_FinancialType::isACLFinancialTypeStatus() ||
-        (CRM_Financial_BAO_FinancialType::isACLFinancialTypeStatus() && CRM_Core_Permission::check('administer CiviCRM Financial Types'))) {
-      $this->addSelect('financial_type_id');
+    CRM_Financial_BAO_FinancialType::getAvailableFinancialTypes($financialTypes, CRM_Core_Action::ADD);
+    $financialOptions = [
+      'options' => $financialTypes,
+    ];
+    if (!CRM_Core_Permission::check('administer CiviCRM Financial Types')) {
+      $financialOptions['context'] = 'search';
     }
-    else {
-      CRM_Financial_BAO_FinancialType::getAvailableFinancialTypes($financialTypes, CRM_Core_Action::ADD);
-      $this->addSelect('financial_type_id', ['context' => 'search', 'options' => $financialTypes]);
-    }
+    $this->addSelect('financial_type_id', $financialOptions);
+
     // add pay later options
     $this->addElement('checkbox', 'is_pay_later', ts('Pay later option'), NULL,
       ['onclick' => "return showHideByValue('is_pay_later','','payLaterOptions','block','radio',false);"]
@@ -550,8 +551,8 @@ class CRM_Event_Form_ManageEvent_Fee extends CRM_Event_Form_ManageEvent {
       $params['payment_processor'] = 'null';
     }
 
-    $params['is_pay_later'] = CRM_Utils_Array::value('is_pay_later', $params, 0);
-    $params['is_billing_required'] = CRM_Utils_Array::value('is_billing_required', $params, 0);
+    $params['is_pay_later'] ??= 0;
+    $params['is_billing_required'] ??= 0;
 
     if ($this->_id) {
 
@@ -666,7 +667,7 @@ class CRM_Event_Form_ManageEvent_Fee extends CRM_Event_Form_ManageEvent {
               $discountOptions = [];
               for ($i = 1; $i < self::NUM_OPTION; $i++) {
                 if (!empty($labels[$i]) &&
-                  !CRM_Utils_System::isNull(CRM_Utils_Array::value($j, $values[$i]))
+                  !CRM_Utils_System::isNull($values[$i][$j] ?? NULL)
                 ) {
                   $discountOptions[] = [
                     'label' => trim($labels[$i]),
@@ -781,7 +782,7 @@ class CRM_Event_Form_ManageEvent_Fee extends CRM_Event_Form_ManageEvent {
     $params['id'] = $this->_id;
     // skip update of financial type in price set
     $params['skipFinancialType'] = TRUE;
-    CRM_Event_BAO_Event::add($params);
+    \Civi\Api4\Event::save(FALSE)->addRecord($params)->execute();
 
     // Update tab "disabled" css class
     $this->ajaxResponse['tabValid'] = !empty($params['is_monetary']);

@@ -13,7 +13,6 @@
 <div class="help">
     {ts}Use this form to configure Contribution Amount options. You can give contributors the ability to enter their own contribution amounts and/or provide a fixed list of amounts. For fixed amounts, you can enter a label for each 'level' of contribution (e.g. Friend, Sustainer, etc.). If you allow people to enter their own dollar amounts, you can also set minimum and maximum values. Depending on your choice of Payment Processor, you may be able to offer a recurring contribution option.{/ts} {docURL page="user/contributions/payment-processors"}
 </div>
-    <div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="top"}</div>
     {if !$paymentProcessor}
         {capture assign=ppUrl}{crmURL p='civicrm/admin/paymentProcessor' q="reset=1"}{/capture}
         <div class="status message">
@@ -200,12 +199,7 @@
 {literal}
 <script type="text/javascript">
 
-   var futurePaymentProcessorMapper = [];
-   {/literal}{if $futurePaymentProcessor}
-   {foreach from=$futurePaymentProcessor item="futurePaymentProcessor" key="index"}{literal}
-     futurePaymentProcessorMapper[{/literal}{$index}{literal}] = '{/literal}{$futurePaymentProcessor}{literal}';
-   {/literal}{/foreach}
-   {literal}
+   {/literal}{if $futurePaymentProcessor}{literal}
    CRM.$(function($) {
      var defId = $('input[name="pledge_default_toggle"][value="contribution_date"]').attr('id');
      var calId = $('input[name="pledge_default_toggle"][value="calendar_date"]').attr('id');
@@ -383,13 +377,13 @@
     function showAdjustRecurring( paymentProcessorIds ) {
         var display = true;
         cj.each(paymentProcessorIds, function(k, id){
-            if( cj.inArray(id, futurePaymentProcessorMapper) == -1 ) {
-                display = false;
-            }
+           if( cj.inArray(parseInt(id), {/literal}{$futurePaymentProcessor}{literal}) == -1 ) {
+              display = false;
+          }
         });
 
         if(display) {
-            cj( '#adjustRecurringFields' ).show( );
+            cj('#adjustRecurringFields').show();
         } else {
             if ( cj( '#adjust_recur_start_date' ).prop('checked' ) ) {
                 cj( '#adjust_recur_start_date' ).prop('checked', false);
@@ -456,7 +450,7 @@
         message: {/literal}"{ts escape='js'}Once you switch to using a Price Set, you won't be able to switch back to your existing settings below except by re-entering them. Are you sure you want to switch to a Price Set?{/ts}"{literal}
       }).on('crmConfirm:yes', function() {
         {/literal}
-        var dataUrl = '{crmURL p="civicrm/ajax/rest" h=0 q="className=CRM_Core_Page_AJAX&fnName=setIsQuickConfig&context=civicrm_contribution_page&id=$contributionPageID" }';
+        var dataUrl = '{crmURL p="civicrm/ajax/rest" h=0 q="className=CRM_Core_Page_AJAX&fnName=setIsQuickConfig&context=civicrm_contribution_page&id=$contributionPageID"}';
         {literal}
         $.getJSON(dataUrl).done(function(result) {window.location = CRM.url("civicrm/admin/price/field", {reset: 1, action: 'browse', sid: result});});
       });

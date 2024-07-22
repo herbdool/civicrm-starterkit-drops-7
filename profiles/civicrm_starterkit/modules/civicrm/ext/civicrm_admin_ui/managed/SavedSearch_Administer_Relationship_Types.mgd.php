@@ -52,7 +52,7 @@ return [
         'saved_search_id.name' => 'Administer_Relationship_Types',
         'type' => 'table',
         'settings' => [
-          'actions' => FALSE,
+          'actions' => TRUE,
           'limit' => 50,
           'classes' => [
             'table',
@@ -130,6 +130,24 @@ return [
                   'condition' => [],
                 ],
                 [
+                  'task' => 'enable',
+                  'entity' => 'RelationshipType',
+                  'target' => 'crm-popup',
+                  'icon' => 'fa-toggle-on',
+                  'text' => E::ts('Enable'),
+                  'style' => 'default',
+                  'condition' => [],
+                ],
+                [
+                  'task' => 'disable',
+                  'entity' => 'RelationshipType',
+                  'target' => 'crm-popup',
+                  'icon' => 'fa-toggle-off',
+                  'text' => E::ts('Disable'),
+                  'style' => 'default',
+                  'condition' => [],
+                ],
+                [
                   'entity' => 'RelationshipType',
                   'action' => 'delete',
                   'join' => '',
@@ -141,14 +159,20 @@ return [
                   'condition' => [],
                 ],
               ],
-              'type' => 'buttons',
+              'type' => 'menu',
+              'icon' => 'fa-bars',
               'alignment' => 'text-right',
             ],
           ],
-          'addButton' => [
-            'path' => 'civicrm/admin/reltype/edit?action=add&reset=1',
-            'text' => E::ts('Add Relationship Type'),
-            'icon' => 'fa-plus',
+          'toolbar' => [
+            [
+              'entity' => 'RelationshipType',
+              'action' => 'add',
+              'target' => 'crm-popup',
+              'style' => 'primary',
+              'text' => E::ts('Add Relationship Type'),
+              'icon' => 'fa-plus',
+            ],
           ],
           'cssRules' => [
             [

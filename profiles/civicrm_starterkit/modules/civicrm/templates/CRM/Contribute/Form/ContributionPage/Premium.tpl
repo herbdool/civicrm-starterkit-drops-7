@@ -13,7 +13,6 @@
   {ts}Then select and review the premiums that you want to offer on this contribution page.{/ts}
 </div>
 <div id="id_Premiums" class="crm-block crm-form-block crm-contribution-contributionpage-premium-form-block">
-  <div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="top"}</div>
   <table class="form-layout-compressed">
     <tr class="crm-contribution-contributionpage-premium-form-block-premiums_active">
       <td class="label">{$form.premiums_active.label}</td>
@@ -22,10 +21,10 @@
   </table>
 
   <div id="premiumSettings">
-    <div class="crm-accordion-wrapper crm-premium-settings-accordion collapsed">
-      <div class="crm-accordion-header">
+    <details class="crm-accordion-bold crm-premium-settings-accordion">
+      <summary>
         {ts}Premiums Settings{/ts}
-      </div>
+      </summary>
       <div class="crm-accordion-body">
         <table class="form-layout-compressed">
           <tr class="crm-contribution-contributionpage-premium-form-block-premiums_intro_title">
@@ -104,9 +103,7 @@
           </tr>
         </table>
       </div>
-      <!-- /.crm-accordion-body -->
-    </div>
-    <!-- /.crm-accordion-wrapper -->
+    </details>
 
     {* include premium product templates *}
     {include file="CRM/Contribute/Page/Premium.tpl"}
@@ -144,5 +141,5 @@
   {/literal}
 </script>
 {/crmRegion}
-{crmRegion name="contribute-form-contributionpage-premium-post}
+{crmRegion name="contribute-form-contributionpage-premium-post"}
 {/crmRegion}

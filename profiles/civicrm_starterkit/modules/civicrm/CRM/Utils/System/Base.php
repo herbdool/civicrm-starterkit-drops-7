@@ -56,7 +56,49 @@ abstract class CRM_Utils_System_Base {
     }
   }
 
+  /**
+   * Determine if the UF/CMS has been loaded already.
+   *
+   * This is generally TRUE. If using the "extern" boot protocol, then this may initially be false (until loadBootStrap runs).
+   *
+   * @internal
+   * @return bool
+   */
+  abstract public function isLoaded(): bool;
+
   abstract public function loadBootStrap($params = [], $loadUser = TRUE, $throwError = TRUE, $realPath = NULL);
+
+  /**
+   * Returns the Smarty template path to the main template that renders the content.
+   *
+   * In CMS contexts, this goes inside their theme, but Standalone needs to render the full HTML page.
+   *
+   * @var int|string $print
+   *   Should match a CRM_Core_Smarty::PRINT_* constant,
+   *   or equal 0 if not in print mode.
+   */
+  public static function getContentTemplate($print = 0): string {
+    if ($print === CRM_Core_Smarty::PRINT_JSON) {
+      return 'CRM/common/snippet.tpl';
+    }
+
+    switch ($print) {
+      case 0:
+        // Not a print context.
+        $config = CRM_Core_Config::singleton();
+        return 'CRM/common/' . strtolower($config->userFramework) . '.tpl';
+
+      case CRM_Core_Smarty::PRINT_PAGE:
+        return 'CRM/common/print.tpl';
+
+      case 'xls':
+      case 'doc':
+        return 'CRM/Contact/Form/Task/Excel.tpl';
+
+      default:
+        return 'CRM/common/snippet.tpl';
+    }
+  }
 
   /**
    * Append an additional breadcrumb tag to the existing breadcrumb.
@@ -98,14 +140,12 @@ abstract class CRM_Utils_System_Base {
    *   The url to post the form.
    */
   public function postURL($action) {
-    $config = CRM_Core_Config::singleton();
     if (!empty($action)) {
       return $action;
     }
 
-    return $this->url(CRM_Utils_Array::value($config->userFrameworkURLVar, $_GET),
-      NULL, TRUE, NULL, FALSE
-    );
+    $current_path = CRM_Utils_System::currentPath();
+    return (string) Civi::url('current://' . $current_path, 'a');
   }
 
   /**
@@ -124,21 +164,52 @@ abstract class CRM_Utils_System_Base {
    *   This link should be to the CMS front end (applies to WP & Joomla).
    * @param bool $forceBackend
    *   This link should be to the CMS back end (applies to WP & Joomla).
-   * @param bool $htmlize
-   *   Whether to encode special html characters such as &.
    *
    * @return string
    */
-  public function url(
+  abstract public function url(
     $path = NULL,
     $query = NULL,
     $absolute = FALSE,
     $fragment = NULL,
     $frontend = FALSE,
-    $forceBackend = FALSE,
-    $htmlize = TRUE
-  ) {
-    return NULL;
+    $forceBackend = FALSE
+  );
+
+  /**
+   * Compose the URL for a page/route.
+   *
+   * @internal
+   * @see \Civi\Core\Url::__toString
+   * @param string $scheme
+   *   Ex: 'frontend', 'backend', 'service'
+   * @param string $path
+   *   Ex: 'civicrm/event/info'
+   * @param string|null $query
+   *   Ex: 'id=100&msg=Hello+world'
+   * @return string|null
+   *   Absolute URL, or NULL if scheme is unsupported.
+   *   Ex: 'https://subdomain.example.com/index.php?q=civicrm/event/info&id=100&msg=Hello+world'
+   */
+  public function getRouteUrl(string $scheme, string $path, ?string $query): ?string {
+    switch ($scheme) {
+      case 'frontend':
+        return $this->url($path, $query, TRUE, NULL, TRUE, FALSE, FALSE);
+
+      case 'service':
+        // The original `url()` didn't have an analog for "service://". But "frontend" is probably the closer bet?
+        // Or maybe getNotifyUrl() makes sense?
+        return $this->url($path, $query, TRUE, NULL, TRUE, FALSE, FALSE);
+
+      case 'backend':
+        return $this->url($path, $query, TRUE, NULL, FALSE, TRUE, FALSE);
+
+      // If the UF defines other major UI/URL conventions, then you might hypothetically handle
+      // additional schemes.
+
+      default:
+        return NULL;
+    }
   }
 
   /**
@@ -162,8 +233,6 @@ abstract class CRM_Utils_System_Base {
    *   This link should be to the CMS front end (applies to WP & Joomla).
    * @param bool $forceBackend
    *   This link should be to the CMS back end (applies to WP & Joomla).
-   * @param bool $htmlize
-   *   Whether to encode special html characters such as &.
    *
    * @return string
    *   The Notification URL.
@@ -174,10 +243,20 @@ abstract class CRM_Utils_System_Base {
     $absolute = FALSE,
     $fragment = NULL,
     $frontend = FALSE,
-    $forceBackend = FALSE,
-    $htmlize = TRUE
+    $forceBackend = FALSE
   ) {
-    return $this->url($path, $query, $absolute, $fragment, $frontend, $forceBackend, $htmlize);
+    return $this->url($path, $query, $absolute, $fragment, $frontend, $forceBackend);
+  }
+
+  /**
+   * Path of the current page e.g. 'civicrm/contact/view'
+   *
+   * @return string|null
+   *   the current menu path
+   */
+  public static function currentPath() {
+    $config = CRM_Core_Config::singleton();
+    return isset($_GET[$config->userFrameworkURLVar]) ? trim($_GET[$config->userFrameworkURLVar], '/') : NULL;
   }
 
   /**
@@ -212,11 +291,11 @@ abstract class CRM_Utils_System_Base {
   /**
    * Load user into session.
    *
-   * @param obj $user
+   * @param string $username
    *
    * @return bool
    */
-  public function loadUser($user) {
+  public function loadUser($username) {
     return TRUE;
   }
 
@@ -363,13 +442,14 @@ abstract class CRM_Utils_System_Base {
    * Create a user in the CMS.
    *
    * @param array $params
-   * @param string $mail
-   *   Email id for cms user.
+   * @param string $mailParam
+   *   Name of the $param which contains the email address.
+   *   Because. Right. OK. That's what it is.
    *
    * @return int|bool
    *   uid if user exists, false otherwise
    */
-  public function createUser(&$params, $mail) {
+  public function createUser(&$params, $mailParam) {
     return FALSE;
   }
 
@@ -917,6 +997,27 @@ abstract class CRM_Utils_System_Base {
   }
 
   /**
+   * Whether to allow access to CMS user sync action
+   * @return bool
+   */
+  public function allowSynchronizeUsers() {
+    return TRUE;
+  }
+
+  /**
+   * Run CMS user sync if allowed, otherwise just returns empty array
+   * @return array
+   */
+  public function synchronizeUsersIfAllowed() {
+    if ($this->allowSynchronizeUsers()) {
+      return $this->synchronizeUsers();
+    }
+    else {
+      return [];
+    }
+  }
+
+  /**
    * Send an HTTP Response base on PSR HTTP RespnseInterface response.
    *
    * @param \Psr\Http\Message\ResponseInterface $response
@@ -927,7 +1028,7 @@ abstract class CRM_Utils_System_Base {
       CRM_Utils_System::setHttpHeader($name, implode(', ', (array) $values));
     }
     echo $response->getBody();
-    CRM_Utils_System::civiExit();
+    CRM_Utils_System::civiExit(0, ['response' => $response]);
   }
 
   /**

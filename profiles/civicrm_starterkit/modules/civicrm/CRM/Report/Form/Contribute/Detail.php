@@ -712,19 +712,23 @@ UNION ALL
         $rows[$rowNum]['civicrm_contact_sort_name_hover'] = ts("View Contact Summary for this Contact.");
       }
 
-      if ($value = CRM_Utils_Array::value('civicrm_contribution_financial_type_id', $row)) {
+      $value = $row['civicrm_contribution_financial_type_id'] ?? NULL;
+      if ($value) {
         $rows[$rowNum]['civicrm_contribution_financial_type_id'] = $contributionTypes[$value];
         $entryFound = TRUE;
       }
-      if ($value = CRM_Utils_Array::value('civicrm_contribution_contribution_status_id', $row)) {
+      $value = $row['civicrm_contribution_contribution_status_id'] ?? NULL;
+      if ($value) {
         $rows[$rowNum]['civicrm_contribution_contribution_status_id'] = $contributionStatus[$value];
         $entryFound = TRUE;
       }
-      if ($value = CRM_Utils_Array::value('civicrm_contribution_contribution_page_id', $row)) {
+      $value = $row['civicrm_contribution_contribution_page_id'] ?? NULL;
+      if ($value) {
         $rows[$rowNum]['civicrm_contribution_contribution_page_id'] = $contributionPages[$value];
         $entryFound = TRUE;
       }
-      if ($value = CRM_Utils_Array::value('civicrm_contribution_payment_instrument_id', $row)) {
+      $value = $row['civicrm_contribution_payment_instrument_id'] ?? NULL;
+      if ($value) {
         $rows[$rowNum]['civicrm_contribution_payment_instrument_id'] = $paymentInstruments[$value];
         $entryFound = TRUE;
       }
@@ -738,7 +742,8 @@ UNION ALL
       }
 
       // Contribution amount links to viewing contribution
-      if ($value = CRM_Utils_Array::value('civicrm_contribution_total_amount', $row)) {
+      $value = $row['civicrm_contribution_total_amount'] ?? NULL;
+      if ($value) {
         $rows[$rowNum]['civicrm_contribution_total_amount'] = CRM_Utils_Money::format($value, $row['civicrm_contribution_currency']);
         if (CRM_Core_Permission::check('access CiviContribute')) {
           $url = CRM_Utils_System::url(
@@ -826,7 +831,8 @@ WHERE  civicrm_contribution_contribution_id={$row['civicrm_contribution_contribu
       }
 
       // Contribution amount links to viewing contribution
-      if ($value = CRM_Utils_Array::value('civicrm_pledge_payment_pledge_id', $row)) {
+      $value = $row['civicrm_pledge_payment_pledge_id'] ?? NULL;
+      if ($value) {
         if (CRM_Core_Permission::check('access CiviContribute')) {
           $url = CRM_Utils_System::url(
             "civicrm/contact/view/pledge",
@@ -876,8 +882,7 @@ WHERE  civicrm_contribution_contribution_id={$row['civicrm_contribution_contribu
       foreach (array_merge($sectionAliases, $this->_selectAliases) as $alias) {
         $ifnulls[] = "ifnull($alias, '') as $alias";
       }
-      $this->_select = "SELECT " . implode(", ", $ifnulls);
-      $this->_select = CRM_Contact_BAO_Query::appendAnyValueToSelect($ifnulls, $sectionAliases);
+      $select = CRM_Contact_BAO_Query::appendAnyValueToSelect($ifnulls, $sectionAliases);
 
       /* Group (un-limited) report by all aliases and get counts. This might
        * be done more efficiently when the contents of $sql are known, ie. by
@@ -893,7 +898,7 @@ WHERE  civicrm_contribution_contribution_id={$row['civicrm_contribution_contribu
         $showsumcontribs = TRUE;
       }
 
-      $query = $this->_select .
+      $query = $select .
         "$addtotals, count(*) as ct from {$this->temporaryTables['civireport_contribution_detail_temp3']['name']} group by " .
         implode(", ", $sectionAliases);
       // initialize array of total counts
@@ -1045,6 +1050,20 @@ WHERE  civicrm_contribution_contribution_id={$row['civicrm_contribution_contribu
       $joinType JOIN civicrm_contribution_soft {$this->_aliases['civicrm_contribution_soft']}
       ON {$this->_aliases['civicrm_contribution_soft']}.contribution_id = {$this->_aliases['civicrm_contribution']}.id
    ";
+  }
+
+  /**
+   * End post processing.
+   *
+   * @param array|null $rows
+   */
+  public function endPostProcess(&$rows = NULL) {
+    $this->groupConcatTested = FALSE;
+    $this->orderBy();
+    $this->groupConcatTested = TRUE;
+    $this->optimisedForOnlyFullGroupBy = FALSE;
+    parent::endPostProcess($rows);
+    $this->optimisedForOnlyFullGroupBy = TRUE;
   }
 
 }

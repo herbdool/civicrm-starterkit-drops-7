@@ -131,6 +131,10 @@ class CRM_Report_Form_Mailing_Detail extends CRM_Report_Form {
           'title' => ts('Delivery Status'),
           'default' => TRUE,
         ],
+        'time_stamp' => [
+          'title' => ts('Delivery Date'),
+          'default' => TRUE,
+        ],
       ],
       'filters' => [
         'delivery_status' => [
@@ -143,6 +147,12 @@ class CRM_Report_Form_Mailing_Detail extends CRM_Report_Form {
             'successful' => 'Successful',
             'bounced' => 'Bounced',
           ],
+        ],
+        'time_stamp' => [
+          'name' => 'time_stamp',
+          'title' => ts('Delivery Date'),
+          'operatorType' => CRM_Report_Form::OP_DATE,
+          'type' => CRM_Utils_Type::T_DATE,
         ],
       ],
       'grouping' => 'mailing-fields',
@@ -271,12 +281,7 @@ class CRM_Report_Form_Mailing_Detail extends CRM_Report_Form {
           if (!empty($field['required']) ||
             !empty($this->_params['fields'][$fieldName])
           ) {
-            if (in_array($fieldName, [
-              'unsubscribe_id',
-              'optout_id',
-              'forward_id',
-              'reply_id',
-            ])) {
+            if (in_array($fieldName, ['unsubscribe_id', 'optout_id', 'forward_id', 'reply_id'])) {
               $select[] = "IF({$field['dbAlias']} IS NULL, 'No', 'Yes') as {$tableName}_{$fieldName}";
               $this->_columnHeaders["{$tableName}_{$fieldName}"]['type'] = $field['type'] ?? NULL;
               $this->_columnHeaders["{$tableName}_{$fieldName}"]['no_display'] = $field['no_display'] ?? NULL;
@@ -345,7 +350,7 @@ class CRM_Report_Form_Mailing_Detail extends CRM_Report_Form {
     }
 
     if (array_key_exists('reply_id', $this->_params['fields']) ||
-      is_numeric(CRM_Utils_Array::value('is_replied_value', $this->_params))
+      is_numeric($this->_params['is_replied_value'] ?? '')
     ) {
       if (($this->_params['is_replied_value'] ?? NULL) == 1) {
         $joinType = 'INNER';
@@ -363,7 +368,7 @@ class CRM_Report_Form_Mailing_Detail extends CRM_Report_Form {
     }
 
     if (array_key_exists('unsubscribe_id', $this->_params['fields']) ||
-      is_numeric(CRM_Utils_Array::value('is_unsubscribed_value', $this->_params))
+      is_numeric($this->_params['is_unsubscribed_value'] ?? '')
     ) {
       if (($this->_params['is_unsubscribed_value'] ?? NULL) == 1
       ) {
@@ -383,7 +388,7 @@ class CRM_Report_Form_Mailing_Detail extends CRM_Report_Form {
     }
 
     if (array_key_exists('optout_id', $this->_params['fields']) ||
-      is_numeric(CRM_Utils_Array::value('is_optout_value', $this->_params))
+      is_numeric($this->_params['is_optout_value'] ?? '')
     ) {
       if (($this->_params['is_optout_value'] ?? NULL) == 1) {
         $joinType = 'INNER';
@@ -402,7 +407,7 @@ class CRM_Report_Form_Mailing_Detail extends CRM_Report_Form {
     }
 
     if (array_key_exists('forward_id', $this->_params['fields']) ||
-      is_numeric(CRM_Utils_Array::value('is_forwarded_value', $this->_params))
+      is_numeric($this->_params['is_forwarded_value'] ?? '')
     ) {
       if (($this->_params['is_forwarded_value'] ?? NULL) == 1) {
         $joinType = 'INNER';

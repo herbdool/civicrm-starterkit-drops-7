@@ -21,6 +21,13 @@
 class CRM_Admin_Form_Mapping extends CRM_Admin_Form {
 
   /**
+   * @return string
+   */
+  public function getDefaultEntity(): string {
+    return 'Mapping';
+  }
+
+  /**
    * @var bool
    */
   public $submitOnce = TRUE;
@@ -38,7 +45,6 @@ class CRM_Admin_Form_Mapping extends CRM_Admin_Form {
 
   public function buildQuickForm() {
     parent::buildQuickForm();
-    $this->setPageTitle(ts('Field Mapping'));
 
     if ($this->_action == CRM_Core_Action::DELETE) {
       return;

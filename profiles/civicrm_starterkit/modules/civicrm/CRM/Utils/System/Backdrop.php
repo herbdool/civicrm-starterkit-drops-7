@@ -23,12 +23,12 @@ class CRM_Utils_System_Backdrop extends CRM_Utils_System_DrupalBase {
   /**
    * @inheritDoc
    */
-  public function createUser(&$params, $mail) {
+  public function createUser(&$params, $mailParam) {
     $form_state = form_state_defaults();
 
     $form_state['input'] = [
       'name' => $params['cms_name'],
-      'mail' => $params[$mail],
+      'mail' => $params[$mailParam],
       'op' => 'Create new account',
     ];
 
@@ -490,7 +490,7 @@ AND    u.status = 1
     global $language;
 
     $langcode = substr($civicrm_language, 0, 2);
-    $languages = language_list(FALSE, TRUE);
+    $languages = language_list();
 
     if (isset($languages[$langcode])) {
       $language = $languages[$langcode];
@@ -596,7 +596,7 @@ AND    u.status = 1
     // all the modules that are listening on it, does not apply
     // to J! and WP as yet
     // CRM-8655
-    CRM_Utils_Hook::config($config);
+    CRM_Utils_Hook::config($config, ['uf' => TRUE]);
 
     if (!$loadUser) {
       return TRUE;
@@ -605,8 +605,8 @@ AND    u.status = 1
     $uid = $params['uid'] ?? NULL;
     if (!$uid) {
       // Load the user we need to check Backdrop permissions.
-      $name = CRM_Utils_Array::value('name', $params, FALSE) ? $params['name'] : trim(CRM_Utils_Array::value('name', $_REQUEST));
-      $pass = CRM_Utils_Array::value('pass', $params, FALSE) ? $params['pass'] : trim(CRM_Utils_Array::value('pass', $_REQUEST));
+      $name = !empty($params['name']) ? $params['name'] : trim($_REQUEST['name'] ?? '');
+      $pass = !empty($params['pass']) ? $params['pass'] : trim($_REQUEST['pass'] ?? '');
 
       if ($name) {
         $uid = user_authenticate($name, $pass);
@@ -642,6 +642,7 @@ AND    u.status = 1
 
     // CRM-8655: Backdrop wasn't available during bootstrap, so
     // hook_civicrm_config() never executes.
+    // FIXME: This call looks redundant with the earlier call in the same function. Consider removing it.
     CRM_Utils_Hook::config($config);
 
     return FALSE;
@@ -915,7 +916,10 @@ AND    u.status = 1
    * @inheritDoc
    */
   public function clearResourceCache() {
-    _backdrop_flush_css_js();
+    // Sometimes metadata gets cleared while the cms isn't bootstrapped.
+    if (function_exists('_backdrop_flush_css_js')) {
+      _backdrop_flush_css_js();
+    }
   }
 
   /**
@@ -1102,7 +1106,7 @@ AND    u.status = 1
    * CMS's drupal views expectations, if any.
    */
   public function getCRMDatabasePrefix(): string {
-    return str_replace(parent::getCRMDatabasePrefix(), '`', '');
+    return str_replace('`', '', parent::getCRMDatabasePrefix());
   }
 
   /**

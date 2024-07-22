@@ -46,11 +46,11 @@
                             {assign var='id' value=$row.id}
                             {assign var='contact_id' value=$row.contact_id}
                             {assign var='urlParams' value="reset=1&id=$id&cid=$contact_id"}
-                            {if call_user_func(array('CRM_Core_Permission','check'), 'view my invoices') OR call_user_func(array('CRM_Core_Permission','check'), 'access CiviContribute')}
+                            {if $canViewMyInvoicesOrAccessCiviContribute}
                                 <a class="button no-popup nowrap"
                                    href="{crmURL p='civicrm/contribute/invoice' q=$urlParams}">
                                     <i class="crm-i fa-download" aria-hidden="true"></i>
-                                    {if empty($row.contribution_status_name) || (!empty($row.contribution_status_name) && $row.contribution_status_name != 'Refunded' && $row.contribution_status_name != 'Cancelled') }
+                                    {if empty($row.contribution_status_name) || (!empty($row.contribution_status_name) && $row.contribution_status_name != 'Refunded' && $row.contribution_status_name != 'Cancelled')}
                                         <span>{ts}Download Invoice{/ts}</span>
                                     {else}
                                         <span>{ts}Download Invoice and Credit Note{/ts}</span>

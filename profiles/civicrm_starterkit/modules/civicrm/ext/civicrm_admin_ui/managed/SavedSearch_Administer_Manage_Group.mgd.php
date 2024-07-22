@@ -59,6 +59,11 @@ return [
                 '=',
                 '"Added"',
               ],
+              [
+                'Group_GroupContact_Contact_01.is_deleted',
+                '=',
+                FALSE,
+              ],
             ],
           ],
           'having' => [],
@@ -225,7 +230,7 @@ return [
                   'target' => 'crm-popup',
                 ],
               ],
-              'type' => 'links',
+              'type' => 'buttons',
               'alignment' => 'text-right',
             ],
             [
@@ -235,12 +240,30 @@ return [
               'icon' => 'fa-bars',
               'links' => [
                 [
+                  'task' => 'enable',
+                  'entity' => 'Group',
+                  'target' => 'crm-popup',
+                  'icon' => 'fa-toggle-on',
+                  'text' => E::ts('Enable'),
+                  'style' => 'default',
+                  'condition' => [],
+                ],
+                [
+                  'task' => 'disable',
+                  'entity' => 'Group',
+                  'target' => 'crm-popup',
+                  'icon' => 'fa-toggle-off',
+                  'text' => E::ts('Disable'),
+                  'style' => 'default',
+                  'condition' => [],
+                ],
+                [
                   'entity' => 'Group',
                   'action' => 'delete',
                   'join' => '',
                   'target' => 'crm-popup',
                   'icon' => 'fa-trash',
-                  'text' => E::ts('Remove Group'),
+                  'text' => E::ts('Delete'),
                   'style' => 'danger',
                   'path' => '',
                   'condition' => [],
@@ -250,15 +273,20 @@ return [
               'alignment' => 'text-right',
             ],
           ],
-          'actions' => FALSE,
+          'actions' => TRUE,
           'classes' => [
             'table',
             'table-striped',
           ],
-          'addButton' => [
-            'path' => 'civicrm/group/add?reset=1',
-            'text' => E::ts('Add Group'),
-            'icon' => 'fa-plus',
+          'toolbar' => [
+            [
+              'entity' => 'Group',
+              'action' => 'add',
+              'target' => 'crm-popup',
+              'style' => 'primary',
+              'text' => E::ts('Add Group'),
+              'icon' => 'fa-plus',
+            ],
           ],
           'cssRules' => [
             [

@@ -1,6 +1,11 @@
 <?php
 use CRM_CivicrmAdminUi_ExtensionUtil as E;
 
+// Temporary check can be removed when moving this file to the civi_contribute extension.
+if (!CRM_Core_Component::isEnabled('CiviContribute')) {
+  return [];
+}
+
 return [
   [
     'name' => 'SavedSearch_Administer_Financial_Accounts',
@@ -56,7 +61,7 @@ return [
         'saved_search_id.name' => 'Administer_Financial_Accounts',
         'type' => 'table',
         'settings' => [
-          'actions' => FALSE,
+          'actions' => TRUE,
           'limit' => 50,
           'classes' => [
             'table',
@@ -155,6 +160,24 @@ return [
                   'condition' => [],
                 ],
                 [
+                  'task' => 'enable',
+                  'entity' => 'FinancialAccount',
+                  'target' => 'crm-popup',
+                  'icon' => 'fa-toggle-on',
+                  'text' => E::ts('Enable'),
+                  'style' => 'default',
+                  'condition' => [],
+                ],
+                [
+                  'task' => 'disable',
+                  'entity' => 'FinancialAccount',
+                  'target' => 'crm-popup',
+                  'icon' => 'fa-toggle-off',
+                  'text' => E::ts('Disable'),
+                  'style' => 'default',
+                  'condition' => [],
+                ],
+                [
                   'entity' => 'FinancialAccount',
                   'action' => 'delete',
                   'join' => '',
@@ -166,14 +189,20 @@ return [
                   'condition' => ['is_reserved', '=', FALSE],
                 ],
               ],
-              'type' => 'buttons',
+              'type' => 'menu',
+              'icon' => 'fa-bars',
               'alignment' => 'text-right',
             ],
           ],
-          'addButton' => [
-            'path' => 'civicrm/admin/financial/financialAccount/edit?action=add&reset=1',
-            'text' => E::ts('Add Financial Account'),
-            'icon' => 'fa-plus',
+          'toolbar' => [
+            [
+              'entity' => 'FinancialAccount',
+              'action' => 'add',
+              'target' => 'crm-popup',
+              'style' => 'primary',
+              'text' => E::ts('Add Financial Account'),
+              'icon' => 'fa-plus',
+            ],
           ],
           'cssRules' => [
             [

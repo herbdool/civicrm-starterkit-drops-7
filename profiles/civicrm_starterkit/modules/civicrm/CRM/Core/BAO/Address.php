@@ -107,7 +107,8 @@ class CRM_Core_BAO_Address extends CRM_Core_DAO_Address implements Civi\Core\Hoo
       ];
 
       foreach ($billing as $key => $val) {
-        if ($value = CRM_Utils_Array::value($val, $params)) {
+        $value = $params[$val] ?? NULL;
+        if ($value) {
           if (!empty($params[$key])) {
             unset($params[$val]);
           }
@@ -293,6 +294,11 @@ class CRM_Core_BAO_Address extends CRM_Core_DAO_Address implements Civi\Core\Hoo
 
     $config = CRM_Core_Config::singleton();
     foreach ($params as $name => $value) {
+      if (is_array($value) && str_starts_with($name, 'custom_')) {
+        // This could be a custom field of type file. We want to unset these as they could
+        // give false positives.
+        unset($value['error'], $value['size']);
+      }
       if (in_array($name, [
         'is_primary',
         'location_type_id',
@@ -300,7 +306,6 @@ class CRM_Core_BAO_Address extends CRM_Core_DAO_Address implements Civi\Core\Hoo
         'contact_id',
         'is_billing',
         'display',
-        'master_id',
       ])) {
         continue;
       }
@@ -393,7 +398,7 @@ class CRM_Core_BAO_Address extends CRM_Core_DAO_Address implements Civi\Core\Hoo
           }
         }
       }
-      $stree = $address->street_address;
+
       $values = [];
       CRM_Core_DAO::storeValues($address, $values);
 
@@ -471,9 +476,13 @@ class CRM_Core_BAO_Address extends CRM_Core_DAO_Address implements Civi\Core\Hoo
     else {
       $fields['county'] = NULL;
     }
-
-    $this->display = CRM_Utils_Address::format($fields, NULL, $microformat);
-    $this->display_text = CRM_Utils_Address::format($fields);
+    if ($microformat) {
+      $this->display = CRM_Utils_Address::formatVCard($fields);
+      $this->display_text = CRM_Utils_Address::format($fields);
+    }
+    else {
+      $this->display = $this->display_text = CRM_Utils_Address::format($fields);
+    }
   }
 
   /**
@@ -719,10 +728,7 @@ ORDER BY civicrm_address.is_primary DESC, civicrm_address.location_type_id DESC,
     ];
 
     // overwriting $streetUnitFormats for 'en_CA' and 'fr_CA' locale
-    if (in_array($locale, [
-      'en_CA',
-      'fr_CA',
-    ])) {
+    if (in_array($locale, ['en_CA', 'fr_CA'])) {
       $streetUnitFormats = ['APT', 'APP', 'SUITE', 'BUREAU', 'UNIT'];
     }
     //@todo per CRM-14459 this regex picks up words with the string in them - e.g APT picks up
@@ -779,11 +785,7 @@ ORDER BY civicrm_address.is_primary DESC, civicrm_address.location_type_id DESC,
 
     $parsingSupportedLocales = ['en_US', 'en_CA', 'fr_CA'];
 
-    if (in_array($locale, $parsingSupportedLocales)) {
-      return TRUE;
-    }
-
-    return FALSE;
+    return in_array($locale, $parsingSupportedLocales);
   }
 
   /**
@@ -905,6 +907,8 @@ SELECT is_primary,
    * Fix the shared address if address is already shared
    * or if address will be shared with itself.
    *
+   * Add in the details from the master address.
+   *
    * @param array $params
    *   Associated array of address params.
    */
@@ -920,6 +924,12 @@ SELECT is_primary,
       $params['master_id'] = NULL;
       CRM_Core_Session::setStatus(ts("You can't connect an address to itself"), '', 'warning');
     }
+    if ($params['master_id']) {
+      $masterAddressParams = Address::get(FALSE)
+        ->addWhere('id', '=', $params['master_id'])->execute()->first();
+      unset($masterAddressParams['id'], $masterAddressParams['is_primary'], $masterAddressParams['is_billing'], $masterAddressParams['contact_id']);
+      $params += $masterAddressParams;
+    }
   }
 
   /**
@@ -932,36 +942,82 @@ SELECT is_primary,
    * @param string $parentOperation Operation being taken on the parent entity.
    */
   public static function processSharedAddress($addressId, $params, $parentOperation = NULL) {
+    // Collect all downstream records of our record so we can update them.
     $query = 'SELECT id, contact_id FROM civicrm_address WHERE master_id = %1';
-    $dao = CRM_Core_DAO::executeQuery($query, [1 => [$addressId, 'Integer']]);
+    $downstreamDao = CRM_Core_DAO::executeQuery($query, [1 => [$addressId, 'Integer']]);
 
     // Default to TRUE if not set to maintain api backward compatibility.
     $createRelationship = $params['add_relationship'] ?? TRUE;
 
-    // unset contact id
-    $skipFields = ['is_primary', 'location_type_id', 'is_billing', 'contact_id'];
-    if (isset($params['master_id']) && !CRM_Utils_System::isNull($params['master_id'])) {
-      if ($createRelationship) {
-        // call the function to create a relationship for the new shared address
-        self::processSharedAddressRelationship($params['master_id'], $params['contact_id']);
-      }
+    // If master_id is set and has a value, we should use it. If it's set and
+    // there is no value, we use the empty value. If it is not set, we should
+    // look it up in the database (could be an update that is not sending the
+    // master id, e.g. a contact added via a profile that is matched with an
+    // exiting contact).
+    if (!array_key_exists('master_id', $params)) {
+      $masterId = \Civi\Api4\Address::get(FALSE)
+        ->addWhere('id', '=', $addressId)
+        ->addSelect('master_id')
+        ->execute()->first()['master_id'] ?? NULL;
     }
     else {
-      // else no new shares will be created, only update shared addresses
-      $skipFields[] = 'master_id';
+      $masterId = $params['master_id'] ?? NULL;
     }
+
+    if ($masterId) {
+      if ($createRelationship) {
+        $contactId = $params['contact_id'] ?? NULL;
+        if (!$contactId) {
+          $contactId = \Civi\Api4\Address::get(FALSE)
+            ->addWhere('id', '=', $addressId)
+            ->addSelect('contact_id')
+            ->execute()->first()['contact_id'];
+        }
+        // call the function to create a relationship for the new shared address
+        self::processSharedAddressRelationship($masterId, $contactId);
+      }
+
+      // Collect the upstream record so we can update it.
+      $query = 'SELECT id, contact_id FROM civicrm_address WHERE id = %1';
+      $upstreamDao = CRM_Core_DAO::executeQuery($query, [1 => [$masterId, 'Integer']]);
+    }
+
+    // These fields never get copied to shared addresses, upstream or down.
+    $skipFields = [
+      'is_primary',
+      'location_type_id',
+      'is_billing',
+      'contact_id',
+    ];
     foreach ($skipFields as $value) {
       unset($params[$value]);
     }
 
-    $addressDAO = new CRM_Core_DAO_Address();
-    while ($dao->fetch()) {
+    while ($downstreamDao->fetch()) {
       // call the function to update the relationship
-      if ($createRelationship && isset($params['master_id']) && !CRM_Utils_System::isNull($params['master_id'])) {
-        self::processSharedAddressRelationship($params['master_id'], $dao->contact_id);
+      if ($masterId) {
+        // If we have a master_id AND we have downstream addresses, this is
+        // untenable. Ensure we overwrite the downstream addresses so they have
+        // a direct relationship with our master_id
+        $params['master_id'] = $masterId;
       }
+      elseif ($createRelationship) {
+        self::processSharedAddressRelationship($addressId, $downstreamDao->contact_id);
+      }
+
+      $addressDAO = new CRM_Core_DAO_Address();
       $addressDAO->copyValues($params);
-      $addressDAO->id = $dao->id;
+      $addressDAO->id = $downstreamDao->id;
+      $addressDAO->save();
+      $addressDAO->copyCustomFields($addressId, $addressDAO->id, $parentOperation);
+    }
+    if ($masterId) {
+      // Update the upstream address. But don't copy up the master_id.
+      unset($params['master_id']);
+      $addressDAO = new CRM_Core_DAO_Address();
+      $upstreamDao->fetch();
+      $addressDAO->copyValues($params);
+      $addressDAO->id = $upstreamDao->id;
       $addressDAO->save();
       $addressDAO->copyCustomFields($addressId, $addressDAO->id, $parentOperation);
     }
@@ -1282,8 +1338,13 @@ SELECT is_primary,
     catch (CRM_Core_Exception $e) {
       $providerExists = FALSE;
     }
-    if ($providerExists) {
-      $provider::format($params);
+    try {
+      if ($providerExists) {
+        $provider::format($params);
+      }
+    }
+    catch (CRM_Core_Exception $e) {
+      \Civi::log()->error('Geocoding error:' . $e->getMessage(), ['geocoder' => get_class($provider), 'input' => $params]);
     }
     // dev/core#2379 - Limit geocode length to 14 characters to avoid validation error on save in UI.
     foreach (['geo_code_1', 'geo_code_2'] as $geocode) {
@@ -1291,6 +1352,8 @@ SELECT is_primary,
         // ensure that if the geocoding provider (Google, OSM etc) has returned the string 'null' because they can't geocode, ensure that contacts are not placed on null island 0,0
         if ($params[$geocode] !== 'null') {
           $params[$geocode] = (float) substr($params[$geocode], 0, 14);
+          //set manual_geo_code to 0
+          $params['manual_geo_code'] = FALSE;
         }
       }
     }
@@ -1311,7 +1374,7 @@ SELECT is_primary,
     }
     CRM_Core_BAO_Block::sortPrimaryFirst($params['address']);
 
-    $updateBlankLocInfo = CRM_Utils_Array::value('updateBlankLocInfo', $params, FALSE);
+    $updateBlankLocInfo = $params['updateBlankLocInfo'] ?? FALSE;
     $contactId = $params['contact_id'];
     //get all the addresses for this contact
     $addresses = self::allAddress($contactId);

@@ -56,6 +56,7 @@ return [
         'saved_search_id.name' => 'Scheduled_Jobs',
         'type' => 'table',
         'settings' => [
+          'actions' => TRUE,
           'description' => NULL,
           'sort' => [
             [
@@ -167,7 +168,7 @@ return [
                   'icon' => 'fa-file-o',
                   'text' => E::ts('View joblog'),
                   'style' => 'default',
-                  'path' => 'civicrm/admin/joblog?jid=[id]&reset=1',
+                  'path' => 'civicrm/admin/joblog#?job_id=[id]',
                   'condition' => [],
                 ],
                 [
@@ -187,7 +188,7 @@ return [
                   'join' => '',
                   'target' => 'crm-popup',
                   'icon' => 'fa-pencil',
-                  'text' => E::ts('Edit Job'),
+                  'text' => E::ts('Edit'),
                   'style' => 'default',
                   'path' => '',
                   'condition' => [],
@@ -204,12 +205,30 @@ return [
                   'condition' => [],
                 ],
                 [
+                  'task' => 'enable',
+                  'entity' => 'Job',
+                  'target' => 'crm-popup',
+                  'icon' => 'fa-toggle-on',
+                  'text' => E::ts('Enable'),
+                  'style' => 'default',
+                  'condition' => [],
+                ],
+                [
+                  'task' => 'disable',
+                  'entity' => 'Job',
+                  'target' => 'crm-popup',
+                  'icon' => 'fa-toggle-off',
+                  'text' => E::ts('Disable'),
+                  'style' => 'default',
+                  'condition' => [],
+                ],
+                [
                   'entity' => 'Job',
                   'action' => 'delete',
                   'join' => '',
                   'target' => 'crm-popup',
                   'icon' => 'fa-trash',
-                  'text' => E::ts('Delete Job'),
+                  'text' => E::ts('Delete'),
                   'style' => 'danger',
                   'path' => '',
                   'condition' => [],
@@ -219,7 +238,6 @@ return [
               'alignment' => 'text-right',
             ],
           ],
-          'actions' => FALSE,
           'classes' => [
             'table',
             'table-striped',

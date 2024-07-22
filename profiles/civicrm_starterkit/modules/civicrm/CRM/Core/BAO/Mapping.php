@@ -483,14 +483,14 @@ class CRM_Core_BAO_Mapping extends CRM_Core_DAO_Mapping implements \Civi\Core\Ho
           $saveMappingFields['name'] = $v['4'] ?? NULL;
         }
 
-        if (is_numeric(CRM_Utils_Array::value('3', $v))) {
+        if (is_numeric($v['3'] ?? '')) {
           $locationTypeId = $v['3'] ?? NULL;
         }
-        elseif (is_numeric(CRM_Utils_Array::value('5', $v))) {
+        elseif (is_numeric($v['5'] ?? '')) {
           $locationTypeId = $v['5'] ?? NULL;
         }
 
-        if (is_numeric(CRM_Utils_Array::value('4', $v))) {
+        if (is_numeric($v['4'] ?? '')) {
           if ($saveMappingFields['name'] === 'im') {
             $saveMappingFields['im_provider_id'] = $v[4];
           }
@@ -498,7 +498,7 @@ class CRM_Core_BAO_Mapping extends CRM_Core_DAO_Mapping implements \Civi\Core\Ho
             $saveMappingFields['phone_type_id'] = $v['4'] ?? NULL;
           }
         }
-        elseif (is_numeric(CRM_Utils_Array::value('6', $v))) {
+        elseif (is_numeric($v['6'] ?? '')) {
           $saveMappingFields['phone_type_id'] = $v['6'] ?? NULL;
         }
 
@@ -532,15 +532,16 @@ class CRM_Core_BAO_Mapping extends CRM_Core_DAO_Mapping implements \Civi\Core\Ho
   }
 
   /**
-   * Function returns all  Custom group Names.
+   * Unused function.
+   * @deprecated since 5.71 will be removed around 5.85.
    *
-   * @param int $customfieldId
-   *   Related file id.
+   * @param string $customfieldId
    *
    * @return null|string
    *   $customGroupName all custom group names
    */
   public static function getCustomGroupName($customfieldId) {
+    CRM_Core_Error::deprecatedFunctionWarning('CRM_Core_BAO_CustomField::getField');
     if ($customFieldId = CRM_Core_BAO_CustomField::getKeyID($customfieldId)) {
       $customGroupId = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomField', $customFieldId, 'custom_group_id');
       $customGroupName = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomGroup', $customGroupId, 'title');
@@ -606,7 +607,7 @@ class CRM_Core_BAO_Mapping extends CRM_Core_DAO_Mapping implements \Civi\Core\Ho
           }
 
           // CRM-14983: verify if values are comma separated convert to array
-          if (!is_array($value) && strstr($params['operator'][$key][$k], 'IN')) {
+          if (!is_array($value) && str_contains($params['operator'][$key][$k], 'IN')) {
             $value = explode(',', $value);
             $value = [$params['operator'][$key][$k] => $value];
           }

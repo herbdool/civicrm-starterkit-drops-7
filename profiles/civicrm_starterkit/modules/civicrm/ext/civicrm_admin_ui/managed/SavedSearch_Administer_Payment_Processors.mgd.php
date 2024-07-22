@@ -1,6 +1,11 @@
 <?php
 use CRM_CivicrmAdminUi_ExtensionUtil as E;
 
+// Temporary check can be removed when moving this file to the civi_contribute extension.
+if (!CRM_Core_Component::isEnabled('CiviContribute')) {
+  return [];
+}
+
 return [
   [
     'name' => 'SavedSearch_Administer_Payment_Processors',
@@ -79,7 +84,7 @@ return [
         'saved_search_id.name' => 'Administer_Payment_Processors',
         'type' => 'table',
         'settings' => [
-          'actions' => FALSE,
+          'actions' => TRUE,
           'limit' => 50,
           'classes' => [
             'table',
@@ -179,6 +184,24 @@ return [
                   'condition' => [],
                 ],
                 [
+                  'task' => 'enable',
+                  'entity' => 'PaymentProcessor',
+                  'target' => 'crm-popup',
+                  'icon' => 'fa-toggle-on',
+                  'text' => E::ts('Enable'),
+                  'style' => 'default',
+                  'condition' => [],
+                ],
+                [
+                  'task' => 'disable',
+                  'entity' => 'PaymentProcessor',
+                  'target' => 'crm-popup',
+                  'icon' => 'fa-toggle-off',
+                  'text' => E::ts('Disable'),
+                  'style' => 'default',
+                  'condition' => [],
+                ],
+                [
                   'entity' => 'PaymentProcessor',
                   'action' => 'delete',
                   'join' => '',
@@ -190,14 +213,20 @@ return [
                   'condition' => [],
                 ],
               ],
-              'type' => 'buttons',
+              'type' => 'menu',
+              'icon' => 'fa-bars',
               'alignment' => 'text-right',
             ],
           ],
-          'addButton' => [
-            'path' => 'civicrm/admin/paymentProcessor/edit?action=add&reset=1',
-            'text' => E::ts('Add Payment Processor'),
-            'icon' => 'fa-plus',
+          'toolbar' => [
+            [
+              'entity' => 'PaymentProcessor',
+              'action' => 'add',
+              'target' => 'crm-popup',
+              'style' => 'primary',
+              'text' => E::ts('Add Payment Processor'),
+              'icon' => 'fa-plus',
+            ],
           ],
           'cssRules' => [
             [

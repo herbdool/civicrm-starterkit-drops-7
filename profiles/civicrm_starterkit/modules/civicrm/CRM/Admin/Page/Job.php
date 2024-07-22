@@ -51,40 +51,47 @@ class CRM_Admin_Page_Job extends CRM_Core_Page_Basic {
           'url' => 'civicrm/admin/joblog',
           'qs' => 'jid=%%id%%&reset=1',
           'title' => ts('See log entries for this Scheduled Job'),
+          'weight' => CRM_Core_Action::getWeight(CRM_Core_Action::VIEW),
         ],
         CRM_Core_Action::VIEW => [
           'name' => ts('Execute'),
           'url' => 'civicrm/admin/job/edit',
           'qs' => 'action=view&id=%%id%%&reset=1',
           'title' => ts('Execute Scheduled Job Now'),
+          'weight' => -15,
         ],
         CRM_Core_Action::UPDATE => [
           'name' => ts('Edit'),
           'url' => 'civicrm/admin/job/edit',
           'qs' => 'action=update&id=%%id%%&reset=1',
           'title' => ts('Edit Scheduled Job'),
+          'weight' => CRM_Core_Action::getWeight(CRM_Core_Action::UPDATE),
         ],
         CRM_Core_Action::DISABLE => [
           'name' => ts('Disable'),
           'ref' => 'crm-enable-disable',
           'title' => ts('Disable Scheduled Job'),
+          'weight' => CRM_Core_Action::getWeight(CRM_Core_Action::DISABLE),
         ],
         CRM_Core_Action::ENABLE => [
           'name' => ts('Enable'),
           'ref' => 'crm-enable-disable',
           'title' => ts('Enable Scheduled Job'),
+          'weight' => CRM_Core_Action::getWeight(CRM_Core_Action::ENABLE),
         ],
         CRM_Core_Action::DELETE => [
           'name' => ts('Delete'),
           'url' => 'civicrm/admin/job/edit',
           'qs' => 'action=delete&id=%%id%%',
           'title' => ts('Delete Scheduled Job'),
+          'weight' => CRM_Core_Action::getWeight(CRM_Core_Action::DELETE),
         ],
         CRM_Core_Action::COPY => [
           'name' => ts('Copy'),
           'url' => 'civicrm/admin/job/edit',
           'qs' => 'action=copy&id=%%id%%',
           'title' => ts('Copy Scheduled Job'),
+          'weight' => CRM_Core_Action::getWeight(CRM_Core_Action::COPY),
         ],
       ];
     }
@@ -99,25 +106,18 @@ class CRM_Admin_Page_Job extends CRM_Core_Page_Basic {
    * Finally it calls the parent's run method.
    */
   public function run() {
-    // set title and breadcrumb
     CRM_Utils_System::setTitle(ts('Settings - Scheduled Jobs'));
-    $breadCrumb = [
+    CRM_Utils_System::appendBreadCrumb([
       [
-        'title' => ts('Scheduled Jobs'),
-        'url' => CRM_Utils_System::url('civicrm/admin',
-          'reset=1'
-        ),
+        'title' => ts('Administer'),
+        'url' => CRM_Utils_System::url('civicrm/admin', 'reset=1'),
       ],
-    ];
-    CRM_Utils_System::appendBreadCrumb($breadCrumb);
+    ]);
 
     $this->_id = CRM_Utils_Request::retrieve('id', 'String',
       $this, FALSE, 0
     );
     $this->_action = CRM_Utils_Request::retrieve('action', 'String',
-      $this, FALSE, 0
-    );
-    $this->_context = CRM_Utils_Request::retrieve('context', 'String',
       $this, FALSE, 0
     );
 
@@ -143,7 +143,7 @@ class CRM_Admin_Page_Job extends CRM_Core_Page_Basic {
   public function browse() {
     // check if non-prod mode is enabled.
     if (CRM_Core_Config::environment() != 'Production') {
-      CRM_Core_Session::setStatus(ts('Execution of scheduled jobs has been turned off by default since this is a non-production environment. You can override this for particular jobs by adding runInNonProductionEnvironment=TRUE as a parameter. This will ignore email settings for this job and will send actual emails if this job is sending mails!'), ts('Non-production Environment'), 'warning', ['expires' => 0]);
+      CRM_Core_Session::setStatus(ts('Execution of scheduled jobs has been turned off by default since this is a non-production environment. You can override this for particular jobs by adding runInNonProductionEnvironment=TRUE as a parameter. Note: this will send emails if your <a %1>outbound email</a> is enabled.', [1 => 'href="' . CRM_Utils_System::url('civicrm/admin/setting/smtp', 'reset=1') . '"']), ts('Non-production Environment'), 'warning', ['expires' => 0]);
     }
     else {
       $cronError = Civi\Api4\System::check(FALSE)

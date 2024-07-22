@@ -24,9 +24,10 @@
  *
  * @method static void getCMSPermissionsUrlParams() Immediately stop script execution and display a 401 "Access Denied" page.
  * @method static mixed permissionDenied() Show access denied screen.
+ * @method static string getContentTemplate(int|string $print = 0) Get the template path to render whole content.
  * @method static mixed logout() Log out the current user.
  * @method static mixed updateCategories() Clear CMS caches related to the user registration/profile forms.
- * @method static void appendBreadCrumb(array $breadCrumbs) Append an additional breadcrumb tag to the existing breadcrumbs.
+ * @method static void appendBreadCrumb(array $breadCrumbs) Append an additional breadcrumb link to the existing breadcrumbs.
  * @method static void resetBreadCrumb() Reset an additional breadcrumb tag to the existing breadcrumb.
  * @method static void addHTMLHead(string $head) Append a string to the head of the HTML file.
  * @method static string postURL(int $action) Determine the post URL for a form.
@@ -39,6 +40,7 @@
  * @method static void appendCoreResources(\Civi\Core\Event\GenericHookEvent $e) Callback for hook_civicrm_coreResourceList.
  * @method static void alterAssetUrl(\Civi\Core\Event\GenericHookEvent $e) Callback for hook_civicrm_getAssetUrl.
  * @method static bool shouldExitAfterFatal() Should the current execution exit after a fatal error?
+ * @method static string|null currentPath() Path of the current page e.g. 'civicrm/contact/view'
  */
 class CRM_Utils_System {
 
@@ -125,7 +127,7 @@ class CRM_Utils_System {
       $qs = explode('&', str_replace('&amp;', '&', $_SERVER['QUERY_STRING']));
       for ($i = 0, $cnt = count($qs); $i < $cnt; $i++) {
         // check first if exist a pair
-        if (strstr($qs[$i], '=') !== FALSE) {
+        if (str_contains($qs[$i], '=')) {
           [$name, $value] = explode('=', $qs[$i]);
           if ($name != $urlVar) {
             $name = rawurldecode($name);
@@ -253,32 +255,43 @@ class CRM_Utils_System {
     $forceBackend = FALSE
   ) {
     // handle legacy null params
-    $path = $path ?? '';
-    $query = $query ?? '';
+    $path ??= '';
+    $query ??= '';
 
     $query = self::makeQueryString($query);
 
     // Legacy handling for when the system passes around html escaped strings
-    if (strstr($query, '&amp;')) {
+    if (str_contains($query, '&amp;')) {
       $query = html_entity_decode($query);
     }
 
     // Extract fragment from path or query if munged together
-    if ($query && strstr($query, '#')) {
+    if ($query && str_contains($query, '#')) {
       [$path, $fragment] = explode('#', $query);
     }
-    if ($path && strstr($path, '#')) {
+    if ($path && str_contains($path, '#')) {
       [$path, $fragment] = explode('#', $path);
     }
 
     // Extract query from path if munged together
-    if ($path && strstr($path, '?')) {
+    if ($path && str_contains($path, '?')) {
       [$path, $extraQuery] = explode('?', $path);
       $query = $extraQuery . ($query ? "&$query" : '');
     }
 
+    if ($frontend === FALSE && $forceBackend === FALSE && !empty($GLOBALS['civicrm_url_defaults'])) {
+      // Caller appears to want the "current://" scheme. For newer environments (eg web-service/iframe;
+      // not frontend/backend), we need
+      $urlObj = \Civi::url('current://' . $path)
+        ->addQuery($query)
+        ->addFragment($fragment)
+        ->setPreferFormat($absolute ? 'absolute' : 'relative')
+        ->setHtmlEscape($htmlize);
+      return (string) $urlObj;
+    }
+
     $config = CRM_Core_Config::singleton();
-    $url = $config->userSystem->url($path, $query, $absolute, $fragment, $frontend, $forceBackend, $htmlize);
+    $url = $config->userSystem->url($path, $query, $absolute, $fragment, $frontend, $forceBackend);
 
     if ($htmlize) {
       $url = htmlentities($url);
@@ -301,7 +314,7 @@ class CRM_Utils_System {
    * @param string $fragment
    *   A fragment identifier (named anchor) to append to the link.
    * @param bool $htmlize
-   *   Whether to encode special html characters such as &.
+   *   Unused param
    * @param bool $frontend
    *   This link should be to the CMS front end (applies to WP & Joomla).
    * @param bool $forceBackend
@@ -315,13 +328,13 @@ class CRM_Utils_System {
     $query = NULL,
     $absolute = FALSE,
     $fragment = NULL,
-    $htmlize = TRUE,
+    $htmlize = NULL,
     $frontend = FALSE,
     $forceBackend = FALSE
   ) {
     $config = CRM_Core_Config::singleton();
     $query = self::makeQueryString($query);
-    return $config->userSystem->getNotifyUrl($path, $query, $absolute, $fragment, $frontend, $forceBackend, $htmlize);
+    return $config->userSystem->getNotifyUrl($path, $query, $absolute, $fragment, $frontend, $forceBackend);
   }
 
   /**
@@ -434,17 +447,6 @@ class CRM_Utils_System {
   }
 
   /**
-   * Path of the current page e.g. 'civicrm/contact/view'
-   *
-   * @return string|null
-   *   the current menu path
-   */
-  public static function currentPath() {
-    $config = CRM_Core_Config::singleton();
-    return isset($_GET[$config->userFrameworkURLVar]) ? trim($_GET[$config->userFrameworkURLVar], '/') : NULL;
-  }
-
-  /**
    * Compose a URL. This is a wrapper for `url()` which is optimized for use in Smarty.
    *
    * @see \smarty_function_crmURL()
@@ -462,12 +464,12 @@ class CRM_Utils_System {
 
     return self::url(
       $p,
-      CRM_Utils_Array::value('q', $params),
-      CRM_Utils_Array::value('a', $params, FALSE),
-      CRM_Utils_Array::value('f', $params),
-      CRM_Utils_Array::value('h', $params, TRUE),
-      CRM_Utils_Array::value('fe', $params, FALSE),
-      CRM_Utils_Array::value('fb', $params, FALSE)
+      $params['q'] ?? NULL,
+      $params['a'] ?? FALSE,
+      $params['f'] ?? NULL,
+      $params['h'] ?? TRUE,
+      $params['fe'] ?? FALSE,
+      $params['fb'] ?? FALSE
     );
   }
 
@@ -503,7 +505,7 @@ class CRM_Utils_System {
 
     if ($referer && !empty($names)) {
       foreach ($names as $name) {
-        if (strstr($referer, $name)) {
+        if (str_contains($referer, $name)) {
           $url = $referer;
           break;
         }
@@ -648,7 +650,7 @@ class CRM_Utils_System {
    */
   public static function authenticateKey($abort = TRUE) {
     // also make sure the key is sent and is valid
-    $key = trim(CRM_Utils_Array::value('key', $_REQUEST));
+    $key = trim($_REQUEST['key'] ?? '');
 
     $docAdd = "More info at: " . CRM_Utils_System::docURL2('sysadmin/setup/jobs', TRUE);
 
@@ -701,8 +703,8 @@ class CRM_Utils_System {
     // auth to make sure the user has a login/password to do a shell operation
     // later on we'll link this to acl's
     if (!$name) {
-      $name = trim(CRM_Utils_Array::value('name', $_REQUEST));
-      $pass = trim(CRM_Utils_Array::value('pass', $_REQUEST));
+      $name = trim($_REQUEST['name'] ?? '');
+      $pass = trim($_REQUEST['pass'] ?? '');
     }
 
     // its ok to have an empty password
@@ -1253,7 +1255,7 @@ class CRM_Utils_System {
     // FIXME: Shouldn't the X-Forwarded-Proto check be part of CRM_Utils_System::isSSL()?
     if (Civi::settings()->get('enableSSL') &&
       !self::isSSL() &&
-      strtolower(CRM_Utils_Array::value('X_FORWARDED_PROTO', $req_headers)) != 'https'
+      strtolower($req_headers['X_FORWARDED_PROTO'] ?? '') != 'https'
     ) {
       // ensure that SSL is enabled on a civicrm url (for cookie reasons etc)
       $url = "https://{$_SERVER['HTTP_HOST']}{$_SERVER['REQUEST_URI']}";
@@ -1300,7 +1302,7 @@ class CRM_Utils_System {
     // convert ipV6 to ipV4
     if ($strictIPV4) {
       // this converts 'IPV4 mapped IPV6 address' to IPV4
-      if (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) && strstr($address, '::ffff:')) {
+      if (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) && str_contains($address, '::ffff:')) {
         $address = ltrim($address, '::ffff:');
       }
     }
@@ -1519,8 +1521,7 @@ class CRM_Utils_System {
       = CRM_Contribute_BAO_Contribution::$_importableFields
         = CRM_Contribute_BAO_Contribution::$_exportableFields
           = CRM_Pledge_BAO_Pledge::$_exportableFields
-            = CRM_Core_BAO_CustomField::$_importFields
-              = CRM_Core_DAO::$_dbColumnValueCache = NULL;
+            = CRM_Core_DAO::$_dbColumnValueCache = NULL;
 
     CRM_Core_OptionGroup::flushAll();
     CRM_Utils_PseudoConstant::flushAll();
@@ -1891,7 +1892,7 @@ class CRM_Utils_System {
       $action = strtolower($action);
     }
 
-    $daoClass = isset($crudLinkSpec['entity']) ? CRM_Core_DAO_AllCoreTables::getFullName($crudLinkSpec['entity']) : CRM_Core_DAO_AllCoreTables::getClassForTable($crudLinkSpec['entity_table']);
+    $daoClass = isset($crudLinkSpec['entity']) ? CRM_Core_DAO_AllCoreTables::getDAONameForEntity($crudLinkSpec['entity']) : CRM_Core_DAO_AllCoreTables::getClassForTable($crudLinkSpec['entity_table']);
     $paths = $daoClass ? $daoClass::getEntityPaths() : [];
     $path = $paths[$action] ?? NULL;
     if (!$path) {

@@ -52,6 +52,9 @@ class CRM_Admin_Form_PaymentProcessor extends CRM_Admin_Form {
       'payment_processor_type_id' => [
         'name' => 'payment_processor_type_id',
         'required' => TRUE,
+        // This is being double added - perhaps we can fix but for now....
+        // dev/core#5266
+        'not-auto-addable' => TRUE,
       ],
       'title' => [
         'name' => 'title',
@@ -94,7 +97,7 @@ class CRM_Admin_Form_PaymentProcessor extends CRM_Admin_Form {
    */
   public function preProcess() {
     parent::preProcess();
-    CRM_Core_Session::singleton()->pushUserContext('civicrm/admin/paymentProcessor?reset=1');
+    CRM_Core_Session::singleton()->pushUserContext(CRM_Utils_System::url('civicrm/admin/paymentProcessor', ['reset' => 1], FALSE, NULL, FALSE));
 
     $this->setPaymentProcessorTypeID();
     $this->setPaymentProcessor();
@@ -246,10 +249,6 @@ class CRM_Admin_Form_PaymentProcessor extends CRM_Admin_Form {
     )
     ) {
       $errors['_qf_default'] = ts('You must have at least the test or live section filled');
-    }
-
-    if (!empty($errors)) {
-      return $errors;
     }
 
     return empty($errors) ? TRUE : $errors;

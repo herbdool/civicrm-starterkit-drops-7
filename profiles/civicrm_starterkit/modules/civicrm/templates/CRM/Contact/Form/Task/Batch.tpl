@@ -19,7 +19,12 @@
       {if $field.skipDisplay}
         {continue}
       {/if}
-      <td>{copyIcon name=$field.name title=$field.title}{$field.title}</td>
+      <td>
+      {if !$field.is_view}
+        {copyIcon name=$field.name title=$field.title}
+      {/if}
+        {$field.title}
+      </td>
     {/foreach}
     </tr>
     </thead>
@@ -33,7 +38,7 @@
       {assign var=n value=$field.name}
       {if $field.options_per_line}
         <td class="compressed">
-          {assign var="count" value="1"}
+          {assign var="count" value=1}
           {strip}
             <table class="form-layout-compressed">
             <tr>
@@ -45,9 +50,9 @@
                   {if $count == $field.options_per_line}
                   </tr>
                   <tr>
-                    {assign var="count" value="1"}
+                    {assign var="count" value=1}
                     {else}
-                    {assign var="count" value=`$count+1`}
+                    {assign var="count" value=$count+1}
                   {/if}
                 {/if}
               {/foreach}

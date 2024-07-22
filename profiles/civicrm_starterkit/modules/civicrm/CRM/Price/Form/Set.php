@@ -243,8 +243,8 @@ class CRM_Price_Form_Set extends CRM_Core_Form {
     // get the submitted form values.
     $params = $this->controller->exportValues('Set');
     $nameLength = CRM_Core_DAO::getAttribute('CRM_Price_DAO_PriceSet', 'name');
-    $params['is_active'] = CRM_Utils_Array::value('is_active', $params, FALSE);
-    $params['financial_type_id'] = CRM_Utils_Array::value('financial_type_id', $params, FALSE);
+    $params['is_active'] ??= FALSE;
+    $params['financial_type_id'] ??= FALSE;
 
     $compIds = [];
     $extends = $params['extends'] ?? NULL;
@@ -272,7 +272,7 @@ class CRM_Price_Form_Set extends CRM_Core_Form {
     else {
       // Jump directly to adding a field if popups are disabled
       $action = CRM_Core_Resources::singleton()->ajaxPopupsEnabled ? 'browse' : 'add';
-      $url = CRM_Utils_System::url('civicrm/admin/price/field', [
+      $url = CRM_Utils_System::url('civicrm/admin/price/field/edit', [
         'reset' => 1,
         'action' => $action,
         'sid' => $set->id,

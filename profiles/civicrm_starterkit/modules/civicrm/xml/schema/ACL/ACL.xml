@@ -10,6 +10,7 @@
     <add>civicrm/acl/edit?reset=1&amp;action=add</add>
     <delete>civicrm/acl/delete?reset=1&amp;action=delete&amp;id=[id]</delete>
     <update>civicrm/acl/edit?reset=1&amp;action=edit&amp;id=[id]</update>
+    <browse>civicrm/acl</browse>
   </paths>
   <field>
     <name>id</name>
@@ -116,7 +117,7 @@
     </html>
     <pseudoconstant>
       <callback>CRM_ACL_BAO_ACL::getObjectIdOptions</callback>
-      <prefetch>false</prefetch>
+      <prefetch>disabled</prefetch>
     </pseudoconstant>
   </field>
   <field>
@@ -143,6 +144,8 @@
     <name>is_active</name>
     <title>ACL Is Active?</title>
     <type>boolean</type>
+    <required>true</required>
+    <default>1</default>
     <comment>Is this property active?</comment>
     <add>1.6</add>
     <html>
