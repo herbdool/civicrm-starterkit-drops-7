@@ -9,16 +9,16 @@
 ; Upgrade CiviCRM core:
 ; terminus drush site.env civicrm-upgrade-db
 
-core = 7.92
+core = 7.101
 api = 2
 
 ; Drupal Core
-projects[drupal][version] = "7.92"
+projects[drupal][version] = "7.101"
 
 ; ====== CIVICRM RELATED =========
 
 libraries[civicrm][download][type] = get
-libraries[civicrm][download][url] = "https://download.civicrm.org/civicrm-5.64.4-drupal.tar.gz"
+libraries[civicrm][download][url] = "https://download.civicrm.org/civicrm-5.75.1-drupal.tar.gz"
 libraries[civicrm][destination] = modules
 libraries[civicrm][directory_name] = civicrm
 

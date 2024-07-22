@@ -4,9 +4,9 @@ core = 7.x
 package = Webform
 configure = admin/config/content/webform
 php = 5.3
-dependencies[] = ctools
-dependencies[] = views
-test_dependencies[] = token
+dependencies[] = ctools:ctools
+dependencies[] = views:views
+test_dependencies[] = token:token
 
 ; Files that contain classes:
 files[] = includes/webform.webformconditionals.inc
@@ -40,8 +40,8 @@ files[] = tests/WebformSubmissionTestCase.test
 files[] = tests/WebformTestCase.test
 files[] = tests/WebformUnitTestCase.test
 
-; Information added by Drupal.org packaging script on 2021-05-21
-version = "7.x-4.24"
+; Information added by Drupal.org packaging script on 2023-09-28
+version = "7.x-4.26"
 core = "7.x"
 project = "webform"
-datestamp = "1621619425"
+datestamp = "1695923876"
